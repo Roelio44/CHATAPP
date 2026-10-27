@@ -1,0 +1,94 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny Catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
+        && incoming().uid == request.auth.uid
+        && incoming().fullName is string && incoming().fullName.size() >= 1 && incoming().fullName.size() <= 80
+        && incoming().userId is string && incoming().userId.size() >= 3 && incoming().userId.size() <= 30;
+      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
+        && incoming().uid == existing().uid;
+    }
+
+    // Friend Requests Collection
+    match /friendRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.senderId == request.auth.uid ||
+        resource.data.receiverId == request.auth.uid
+      );
+      allow create: if isSignedIn() && isValidId(requestId)
+        && incoming().senderId == request.auth.uid
+        && incoming().status == 'pending';
+      allow update: if isSignedIn() && isValidId(requestId) && (
+        existing().receiverId == request.auth.uid ||
+        existing().senderId == request.auth.uid
+      );
+      allow delete: if isSignedIn() && isValidId(requestId) && (
+        existing().senderId == request.auth.uid ||
+        existing().receiverId == request.auth.uid
+      );
+    }
+
+    // Friends Collection
+    match /friends/{friendId} {
+      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow create: if isSignedIn() && isValidId(friendId)
+        && incoming().uid == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(friendId)
+        && existing().uid == request.auth.uid;
+      allow delete: if isSignedIn() && isValidId(friendId)
+        && existing().uid == request.auth.uid;
+    }
+
+    // Chats Collection
+    match /chats/{chatId} {
+      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isSignedIn() && isValidId(chatId)
+        && request.auth.uid in incoming().participants
+        && incoming().participants.size() == 2;
+      allow update: if isSignedIn() && isValidId(chatId)
+        && request.auth.uid in existing().participants;
+      allow delete: if isSignedIn() && isValidId(chatId)
+        && request.auth.uid in existing().participants;
+
+      // Messages Subcollection (Master Gate pattern)
+      match /messages/{messageId} {
+        allow read: if isSignedIn() && isValidId(messageId)
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow create: if isSignedIn() && isValidId(messageId)
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+          && incoming().senderId == request.auth.uid
+          && incoming().text is string && incoming().text.size() > 0 && incoming().text.size() <= 2000;
+        allow update: if isSignedIn() && isValidId(messageId)
+          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow delete: if isSignedIn() && isValidId(messageId)
+          && existing().senderId == request.auth.uid;
+      }
+    }
+  }
+}

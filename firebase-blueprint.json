@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with presence, bio, and unique handle",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "fullName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "email": { "type": "string", "maxLength": 128 },
+        "userId": { "type": "string", "minLength": 3, "maxLength": 30, "pattern": "^[a-zA-Z0-9_]+$" },
+        "profileImage": { "type": "string", "maxLength": 2048 },
+        "bio": { "type": "string", "maxLength": 240 },
+        "isOnline": { "type": "boolean" },
+        "lastSeen": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "fullName", "email", "userId", "isOnline"]
+    },
+    "FriendRequest": {
+      "title": "FriendRequest",
+      "description": "Friend request between two users",
+      "type": "object",
+      "properties": {
+        "requestId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "receiverId": { "type": "string", "maxLength": 128 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "rejected"] },
+        "senderName": { "type": "string", "maxLength": 80 },
+        "senderUserId": { "type": "string", "maxLength": 30 },
+        "senderProfileImage": { "type": "string", "maxLength": 2048 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderId", "receiverId", "status"]
+    },
+    "Friend": {
+      "title": "Friend",
+      "description": "Bidirectional friendship link",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "friendUid": { "type": "string", "maxLength": 128 },
+        "friendName": { "type": "string", "maxLength": 80 },
+        "friendUserId": { "type": "string", "maxLength": 30 },
+        "friendProfileImage": { "type": "string", "maxLength": 2048 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "friendUid"]
+    },
+    "Chat": {
+      "title": "Chat",
+      "description": "Conversation between two users",
+      "type": "object",
+      "properties": {
+        "chatId": { "type": "string", "maxLength": 128 },
+        "participants": { "type": "array" },
+        "lastMessage": { "type": "string", "maxLength": 2000 },
+        "lastSenderId": { "type": "string", "maxLength": 128 },
+        "lastMessageTime": { "type": "string", "format": "date-time" },
+        "pinnedBy": { "type": "array" },
+        "unreadCount": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participants"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Real-time chat message",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string", "maxLength": 128 },
+        "chatId": { "type": "string", "maxLength": 128 },
+        "senderId": { "type": "string", "maxLength": 128 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "seen": { "type": "boolean" },
+        "delivered": { "type": "boolean" },
+        "replyTo": { "type": "object" }
+      },
+      "required": ["chatId", "senderId", "text", "seen", "delivered"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Collection of LinkUp Messenger user profiles"
+    },
+    "/friendRequests/{requestId}": {
+      "schema": { "$ref": "#/entities/FriendRequest" },
+      "description": "Friend request documents between users"
+    },
+    "/friends/{friendId}": {
+      "schema": { "$ref": "#/entities/Friend" },
+      "description": "Friendship records"
+    },
+    "/chats/{chatId}": {
+      "schema": { "$ref": "#/entities/Chat" },
+      "description": "Chat conversations between users"
+    },
+    "/chats/{chatId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Messages subcollection in a chat"
+    }
+  }
+}

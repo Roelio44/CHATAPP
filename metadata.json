@@ -1,0 +1,6 @@
+{
+  "name": "LinkUp Messenger",
+  "description": "A modern, premium Android messenger application with real-time dynamic messaging, user discovery, friend requests, and theme personalization.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
