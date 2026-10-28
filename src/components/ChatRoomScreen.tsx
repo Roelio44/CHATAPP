@@ -201,11 +201,19 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           >
             <Video className="w-4 h-4" />
           </button>
+          <button
+            onClick={onBack}
+            className="hidden md:flex p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            title="Close conversation"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
       {/* Message Feed Area */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+        <div className="max-w-4xl mx-auto w-full space-y-3">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 my-auto">
             <img
@@ -303,7 +311,8 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             );
           })
         )}
-        <div ref={messagesEndRef} />
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Quick Emojis bar */}
@@ -312,7 +321,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 10 }}
-          className="px-4 py-2 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-around gap-2"
+          className="px-4 py-2 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-4"
         >
           {QUICK_EMOJIS.map((emoji) => (
             <button
@@ -328,61 +337,71 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
       {/* Reply Preview Above Input */}
       {replyingTo && (
-        <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <div className="flex items-center gap-2 min-w-0">
-            <Reply className="w-4 h-4 text-blue-500 shrink-0" />
-            <div className="min-w-0">
-              <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 block truncate">
-                Replying to{' '}
-                {replyingTo.senderId === currentUser.uid ? 'yourself' : otherUser.fullName}
-              </span>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
-                {replyingTo.text}
-              </p>
+        <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
+          <div className="max-w-4xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2 min-w-0">
+              <Reply className="w-4 h-4 text-blue-500 shrink-0" />
+              <div className="min-w-0">
+                <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 block truncate">
+                  Replying to{' '}
+                  {replyingTo.senderId === currentUser.uid ? 'yourself' : otherUser.fullName}
+                </span>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
+                  {replyingTo.text}
+                </p>
+              </div>
             </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              className="p-1 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
-          <button
-            onClick={() => setReplyingTo(null)}
-            className="p-1 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
         </div>
       )}
 
       {/* Message Input Bottom Bar */}
       <form
         onSubmit={handleSend}
-        className="px-3 py-2 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 flex items-center gap-2 z-20 transition-colors"
+        className="px-4 py-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors"
       >
-        <button
-          type="button"
-          onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-          className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-          title="Add emoji"
-        >
-          <Smile className="w-5 h-5" />
-        </button>
+        <div className="max-w-4xl mx-auto flex items-center gap-2 w-full">
+          <button
+            type="button"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+            title="Add emoji"
+          >
+            <Smile className="w-5 h-5" />
+          </button>
 
-        <div className="flex-1 relative">
-          <input
-            ref={inputRef}
-            type="text"
-            placeholder="Type a message..."
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            className="w-full px-4 py-2.5 text-sm rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 border border-transparent transition-all"
-          />
+          <div className="flex-1 relative">
+            <input
+              ref={inputRef}
+              type="text"
+              placeholder="Type a message (Press Enter to send)..."
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSend();
+                }
+              }}
+              className="w-full px-4 py-2.5 text-sm rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 border border-transparent transition-all"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={!inputText.trim() || isSending}
+            className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0"
+            title="Send message (Enter)"
+          >
+            <Send className="w-4 h-4" />
+          </button>
         </div>
-
-        <button
-          type="submit"
-          disabled={!inputText.trim() || isSending}
-          className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0"
-          title="Send message"
-        >
-          <Send className="w-4 h-4" />
-        </button>
       </form>
     </div>
   );

@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { AndroidShell } from './components/AndroidShell';
+import { WebAppLayout } from './components/WebAppLayout';
+import { WebEmptyCanvas } from './components/WebEmptyCanvas';
 import { SplashScreen } from './components/SplashScreen';
 import { AuthScreen } from './components/AuthScreen';
 import { ProfileSetupScreen } from './components/ProfileSetupScreen';
@@ -47,9 +48,18 @@ function MainApp() {
     testFirestoreConnection();
     const timer = setTimeout(() => {
       setShowSplash(false);
-    }, 1200);
+    }, 1000);
     return () => clearTimeout(timer);
   }, []);
+
+  // Sync document title with unread count for authentic webapp experience
+  useEffect(() => {
+    if (unreadChatsCount > 0) {
+      document.title = `(${unreadChatsCount}) LinkUp Messenger`;
+    } else {
+      document.title = 'LinkUp Messenger';
+    }
+  }, [unreadChatsCount]);
 
   // Listen to total unread count for badge
   useEffect(() => {
@@ -108,88 +118,71 @@ function MainApp() {
 
   if (loading) {
     return (
-      <AndroidShell>
-        <div className="flex-1 flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-          <div className="w-8 h-8 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
-        </div>
-      </AndroidShell>
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950">
+        <div className="w-10 h-10 rounded-full border-3 border-blue-600 border-t-transparent animate-spin" />
+        <span className="mt-3 text-xs font-medium text-zinc-400">Loading LinkUp Messenger...</span>
+      </div>
     );
   }
 
-  // Not logged in -> Show Authentication Screen
+  // Not logged in -> Show Authentication Web Card
   if (!currentUser) {
     return (
-      <AndroidShell>
-        <AuthScreen />
-      </AndroidShell>
+      <div className="min-h-screen w-screen flex items-center justify-center bg-zinc-100 dark:bg-zinc-950 p-4 transition-colors">
+        <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-2xl overflow-hidden">
+          <AuthScreen />
+        </div>
+      </div>
     );
   }
 
-  // Logged in but profile incomplete -> Show Profile Setup Screen
+  // Logged in but profile incomplete -> Show Profile Setup Web Card
   if (needsProfileSetup || !userProfile) {
     return (
-      <AndroidShell>
-        <ProfileSetupScreen />
-      </AndroidShell>
+      <div className="min-h-screen w-screen flex items-center justify-center bg-zinc-100 dark:bg-zinc-950 p-4 transition-colors">
+        <div className="w-full max-w-md rounded-3xl bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-800 shadow-2xl overflow-hidden">
+          <ProfileSetupScreen />
+        </div>
+      </div>
     );
   }
 
-  // Active chat room view
-  if (activeChat) {
-    return (
-      <AndroidShell>
-        <ChatRoomScreen
-          chatId={activeChat.chatId}
-          otherUser={activeChat.otherUser}
-          currentUser={userProfile}
-          onBack={() => setActiveChat(null)}
-        />
-      </AndroidShell>
-    );
-  }
-
-  // Settings screen view
-  if (isSettingsOpen) {
-    return (
-      <AndroidShell>
-        <SettingsScreen
-          currentProfile={userProfile}
-          onBack={() => setIsSettingsOpen(false)}
-        />
-      </AndroidShell>
-    );
-  }
-
-  // Main navigation tabs view
-  return (
-    <AndroidShell>
-      <div className="flex-1 flex flex-col min-h-0 relative overflow-hidden">
-        {activeTab === 'chats' && (
+  // Sidebar content (Changes based on active tab or settings)
+  const sidebarContent = (
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {isSettingsOpen ? (
+          <SettingsScreen
+            currentProfile={userProfile}
+            onBack={() => setIsSettingsOpen(false)}
+          />
+        ) : activeTab === 'chats' ? (
           <ChatsScreen
             currentProfile={userProfile}
+            activeChatId={activeChat?.chatId}
             onSelectChat={(chatId, otherUser) =>
               setActiveChat({ chatId, otherUser })
             }
-            onNavigateToSearch={() => setActiveTab('search')}
+            onNavigateToSearch={() => {
+              setActiveTab('search');
+              setIsSettingsOpen(false);
+            }}
           />
-        )}
-
-        {activeTab === 'friends' && (
+        ) : activeTab === 'friends' ? (
           <FriendsScreen
             currentProfile={userProfile}
             onOpenChatWithUser={handleOpenChatWithUser}
-            onNavigateToSearch={() => setActiveTab('search')}
+            onNavigateToSearch={() => {
+              setActiveTab('search');
+              setIsSettingsOpen(false);
+            }}
           />
-        )}
-
-        {activeTab === 'search' && (
+        ) : activeTab === 'search' ? (
           <SearchUsersScreen
             currentUser={userProfile}
             onOpenChatWithUser={handleOpenChatWithUser}
           />
-        )}
-
-        {activeTab === 'profile' && (
+        ) : (
           <ProfileScreen
             currentProfile={userProfile}
             onNavigateToSettings={() => setIsSettingsOpen(true)}
@@ -197,17 +190,55 @@ function MainApp() {
         )}
       </div>
 
-      <AndroidNavBar
-        activeTab={activeTab}
-        onTabChange={(tab) => {
-          setActiveTab(tab);
-          setActiveChat(null);
-          setIsSettingsOpen(false);
-        }}
-        unreadChatsCount={unreadChatsCount}
-        pendingRequestsCount={pendingRequestsCount}
-      />
-    </AndroidShell>
+      {/* Mobile Bottom Navigation Bar (Hidden on desktop md:) */}
+      <div className="md:hidden shrink-0">
+        <AndroidNavBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setIsSettingsOpen(false);
+          }}
+          unreadChatsCount={unreadChatsCount}
+          pendingRequestsCount={pendingRequestsCount}
+        />
+      </div>
+    </div>
+  );
+
+  // Main Canvas Content (Either active chat room or web empty state)
+  const mainContent = activeChat ? (
+    <ChatRoomScreen
+      chatId={activeChat.chatId}
+      otherUser={activeChat.otherUser}
+      currentUser={userProfile}
+      onBack={() => setActiveChat(null)}
+    />
+  ) : (
+    <WebEmptyCanvas
+      onNavigateTab={(tab) => {
+        setActiveTab(tab);
+        setIsSettingsOpen(false);
+      }}
+    />
+  );
+
+  return (
+    <WebAppLayout
+      activeTab={activeTab}
+      onTabChange={(tab) => {
+        setActiveTab(tab);
+        setIsSettingsOpen(false);
+      }}
+      isSettingsOpen={isSettingsOpen}
+      onOpenSettings={() => setIsSettingsOpen(true)}
+      onCloseSettings={() => setIsSettingsOpen(false)}
+      userProfile={userProfile}
+      unreadChatsCount={unreadChatsCount}
+      pendingRequestsCount={pendingRequestsCount}
+      activeChat={activeChat}
+      sidebarContent={sidebarContent}
+      mainContent={mainContent}
+    />
   );
 }
 

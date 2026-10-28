@@ -33,12 +33,14 @@ import { togglePinChat } from '../services/chatService';
 
 interface ChatsScreenProps {
   currentProfile: UserProfile;
+  activeChatId?: string;
   onSelectChat: (chatId: string, otherUser: UserProfile) => void;
   onNavigateToSearch: () => void;
 }
 
 export const ChatsScreen: React.FC<ChatsScreenProps> = ({
   currentProfile,
+  activeChatId,
   onSelectChat,
   onNavigateToSearch,
 }) => {
@@ -229,6 +231,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                       chat={chat}
                       currentUserId={currentProfile.uid}
                       isPinned={true}
+                      isSelected={activeChatId === chat.id}
                       onSelect={() => chat.otherUser && onSelectChat(chat.id, chat.otherUser)}
                       onTogglePin={(e) => handleTogglePin(e, chat)}
                     />
@@ -252,6 +255,7 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
                       chat={chat}
                       currentUserId={currentProfile.uid}
                       isPinned={false}
+                      isSelected={activeChatId === chat.id}
                       onSelect={() => chat.otherUser && onSelectChat(chat.id, chat.otherUser)}
                       onTogglePin={(e) => handleTogglePin(e, chat)}
                     />
@@ -276,6 +280,7 @@ interface ChatCardProps {
   chat: Chat;
   currentUserId: string;
   isPinned: boolean;
+  isSelected?: boolean;
   onSelect: () => void;
   onTogglePin: (e: React.MouseEvent) => void;
 }
@@ -284,6 +289,7 @@ const ChatCard: React.FC<ChatCardProps> = ({
   chat,
   currentUserId,
   isPinned,
+  isSelected,
   onSelect,
   onTogglePin,
 }) => {
@@ -296,7 +302,9 @@ const ChatCard: React.FC<ChatCardProps> = ({
     <div
       onClick={onSelect}
       className={`group flex items-center gap-3.5 p-3 rounded-2xl transition-all cursor-pointer select-none active:scale-[0.99] ${
-        hasUnread
+        isSelected
+          ? 'bg-blue-600/15 dark:bg-blue-500/20 border border-blue-500/30'
+          : hasUnread
           ? 'bg-blue-50/70 dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-950/30'
           : 'bg-white/80 dark:bg-zinc-900/70 hover:bg-white dark:hover:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/40'
       }`}
