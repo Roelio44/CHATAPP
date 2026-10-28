@@ -36,6 +36,7 @@ interface AuthContextType {
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, fullName: string) => Promise<void>;
+  loginDemoAccount: (email?: string) => Promise<void>;
   logout: () => Promise<void>;
   createUserProfile: (data: {
     fullName: string;
@@ -139,9 +140,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
-      console.error('Google Sign-in failed', err);
-      setAuthError(err.message || 'Google Sign-In failed');
-      throw err;
+      let msg = 'Google Sign-In could not be completed.';
+      const code = err?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        const domain = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
+        msg = `Domain not authorized for Google OAuth: "${domain}". Please use the Email login below to sign in instantly, or add "${domain}" in Firebase Console > Authentication > Settings > Authorized Domains.`;
+      } else if (code === 'auth/popup-blocked') {
+        msg = 'Sign-in popup was blocked by your browser. Please allow popups for this site, or use the Email login below.';
+      } else if (code === 'auth/popup-closed-by-user') {
+        msg = 'Sign-in was cancelled (the Google popup was closed before completion).';
+      } else if (code === 'auth/cancelled-popup-request') {
+        msg = 'A previous sign-in request is already in progress.';
+      } else if (err?.message) {
+        msg = err.message;
+      }
+      console.warn('Google Sign-in status:', msg);
+      setAuthError(msg);
+    }
+  };
+
+  const loginDemoAccount = async (demoEmail = 'dhiraj.demo@linkup.app') => {
+    setAuthError(null);
+    try {
+      // Try login first, if user doesn't exist, create it
+      await signInWithEmailAndPassword(auth, demoEmail, 'linkup123456');
+    } catch (err: any) {
+      if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
+        try {
+          await createUserWithEmailAndPassword(auth, demoEmail, 'linkup123456');
+          setNeedsProfileSetup(true);
+        } catch (createErr: any) {
+          setAuthError(createErr.message || 'Failed to initialize demo account');
+        }
+      } else {
+        setAuthError(err.message || 'Failed to sign in with demo account');
+      }
     }
   };
 
@@ -276,6 +309,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loginWithGoogle,
         loginWithEmail,
         signUpWithEmail,
+        loginDemoAccount,
         logout,
         createUserProfile,
         updateUserProfile,
