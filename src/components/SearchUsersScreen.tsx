@@ -22,6 +22,7 @@ import {
   sendFriendRequest,
   FriendshipStatus,
 } from '../services/friendService';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface SearchUsersScreenProps {
   currentUser: UserProfile;
@@ -213,9 +214,12 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
                 </div>
 
                 <div className="min-w-0">
-                  <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                    {user.fullName}
-                  </h4>
+                  <div className="flex items-center gap-1">
+                    <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                      {user.fullName}
+                    </h4>
+                    {user.isVerified && <VerifiedBadge size="xs" />}
+                  </div>
                   <p className="text-xs text-blue-600 dark:text-blue-400 font-mono truncate">
                     @{user.userId}
                   </p>

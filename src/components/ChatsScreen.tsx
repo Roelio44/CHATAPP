@@ -30,6 +30,7 @@ import {
 import { Chat, UserProfile } from '../types';
 import { formatMessageTime } from '../utils/formatTime';
 import { togglePinChat } from '../services/chatService';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface ChatsScreenProps {
   currentProfile: UserProfile;
@@ -343,9 +344,12 @@ const ChatCard: React.FC<ChatCardProps> = ({
       {/* Name & Last Message Info */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-0.5">
-          <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-            {other?.fullName || 'LinkUp User'}
-          </h4>
+          <div className="flex items-center gap-1 min-w-0">
+            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+              {other?.fullName || 'LinkUp User'}
+            </h4>
+            {other?.isVerified && <VerifiedBadge size="xs" />}
+          </div>
           <span
             className={`text-[11px] shrink-0 font-medium ${
               hasUnread

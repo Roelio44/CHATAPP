@@ -36,6 +36,7 @@ import {
   removeFriend,
 } from '../services/friendService';
 import { formatLastSeen } from '../utils/formatTime';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface FriendsScreenProps {
   currentProfile: UserProfile;
@@ -383,9 +384,12 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({
                         </div>
 
                         <div className="min-w-0">
-                          <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                            {friend.friendName}
-                          </h4>
+                          <div className="flex items-center gap-1">
+                            <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                              {friend.friendName}
+                            </h4>
+                            {friend.userProfile?.isVerified && <VerifiedBadge size="xs" />}
+                          </div>
                           <p className="text-xs text-zinc-400 font-mono truncate">
                             @{friend.friendUserId}
                           </p>

@@ -13,6 +13,12 @@ export interface UserProfile {
   isOnline: boolean;
   lastSeen: any; // Firestore Timestamp or ISO string
   createdAt: any;
+  isVerified?: boolean; // Blue tick verified account
+  verifiedAt?: any;
+  isBanned?: boolean; // Admin moderation ban
+  banReason?: string;
+  bannedAt?: any;
+  role?: 'user' | 'admin';
 }
 
 export interface FriendRequest {
@@ -67,6 +73,16 @@ export interface Message {
   };
 }
 
+export interface SystemAlert {
+  id: string;
+  title: string;
+  message: string;
+  type: 'info' | 'warning' | 'urgent' | 'announcement';
+  isActive: boolean;
+  createdAt: any;
+  createdBy: string;
+}
+
 export type ThemePreference = 'system' | 'light' | 'dark';
 
-export type MainTab = 'chats' | 'friends' | 'search' | 'profile';
+export type MainTab = 'chats' | 'friends' | 'search' | 'profile' | 'admin';

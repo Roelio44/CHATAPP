@@ -30,6 +30,7 @@ import {
 import { Message, UserProfile } from '../types';
 import { sendMessage, markMessagesAsSeen } from '../services/chatService';
 import { formatMessageTime, formatLastSeen } from '../utils/formatTime';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface ChatRoomScreenProps {
   chatId: string;
@@ -192,9 +193,12 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
           {/* User Details */}
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-              {otherUser.fullName}
-            </h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 truncate">
+                {otherUser.fullName}
+              </h2>
+              {otherUser.isVerified && <VerifiedBadge size="xs" />}
+            </div>
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate flex items-center gap-1">
               <span>@{otherUser.userId}</span>
               <span>•</span>

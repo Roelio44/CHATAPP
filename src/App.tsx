@@ -18,6 +18,8 @@ import { FriendsScreen } from './components/FriendsScreen';
 import { SearchUsersScreen } from './components/SearchUsersScreen';
 import { ProfileScreen } from './components/ProfileScreen';
 import { SettingsScreen } from './components/SettingsScreen';
+import { AdminPanelScreen } from './components/AdminPanelScreen';
+import { BannedScreen } from './components/BannedScreen';
 import { MainTab, UserProfile } from './types';
 import {
   db,
@@ -30,7 +32,7 @@ import {
 import { getOrCreateChat } from './services/chatService';
 
 function MainApp() {
-  const { currentUser, userProfile, loading, needsProfileSetup } = useAuth();
+  const { currentUser, userProfile, loading, needsProfileSetup, isAdmin } = useAuth();
   const [showSplash, setShowSplash] = useState(true);
   const [activeTab, setActiveTab] = useState<MainTab>('chats');
   const [activeChat, setActiveChat] = useState<{
@@ -60,6 +62,13 @@ function MainApp() {
       document.title = 'LinkUp Messenger';
     }
   }, [unreadChatsCount]);
+
+  // Guard against non-admin navigating to admin tab
+  useEffect(() => {
+    if (activeTab === 'admin' && !isAdmin) {
+      setActiveTab('chats');
+    }
+  }, [activeTab, isAdmin]);
 
   // Listen to total unread count for badge
   useEffect(() => {
@@ -165,6 +174,11 @@ function MainApp() {
     );
   }
 
+  // Banned / Suspended account -> Show Banned Screen
+  if (userProfile.isBanned) {
+    return <BannedScreen userProfile={userProfile} />;
+  }
+
   // Sidebar content (Changes based on active tab or settings)
   const sidebarContent = (
     <div className="flex-1 flex flex-col h-full overflow-hidden">
@@ -173,6 +187,10 @@ function MainApp() {
           <SettingsScreen
             currentProfile={userProfile}
             onBack={() => setIsSettingsOpen(false)}
+            onNavigateToAdmin={() => {
+              setIsSettingsOpen(false);
+              setActiveTab('admin');
+            }}
           />
         ) : activeTab === 'chats' ? (
           <ChatsScreen
@@ -223,8 +241,27 @@ function MainApp() {
     </div>
   );
 
-  // Main Canvas Content (Either active chat room or web empty state)
-  const mainContent = activeChat ? (
+  // Main Canvas Content (Either active chat room, admin panel, or web empty state)
+  const mainContent = activeTab === 'admin' && isAdmin ? (
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <AdminPanelScreen
+        currentProfile={userProfile}
+        onClose={() => setActiveTab('chats')}
+      />
+      {/* Mobile Bottom Bar when in Admin Tab */}
+      <div className="md:hidden shrink-0">
+        <AndroidNavBar
+          activeTab={activeTab}
+          onTabChange={(tab) => {
+            setActiveTab(tab);
+            setIsSettingsOpen(false);
+          }}
+          unreadChatsCount={unreadChatsCount}
+          pendingRequestsCount={pendingRequestsCount}
+        />
+      </div>
+    </div>
+  ) : activeChat ? (
     <ChatRoomScreen
       chatId={activeChat.chatId}
       otherUser={activeChat.otherUser}

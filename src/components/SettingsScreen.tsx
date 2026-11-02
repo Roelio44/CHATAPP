@@ -16,6 +16,7 @@ import {
   LogOut,
   Info,
   Check,
+  ShieldCheck,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -24,14 +25,16 @@ import { ThemePreference, UserProfile } from '../types';
 interface SettingsScreenProps {
   currentProfile: UserProfile;
   onBack: () => void;
+  onNavigateToAdmin?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   currentProfile,
   onBack,
+  onNavigateToAdmin,
 }) => {
   const { theme, setTheme, isDark } = useTheme();
-  const { logout } = useAuth();
+  const { logout, isAdmin, toggleDemoAdmin } = useAuth();
 
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
@@ -72,6 +75,55 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       </div>
 
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+        {/* Admin Center (If Super Admin) */}
+        {isAdmin && (
+          <div className="p-4 rounded-2xl bg-gradient-to-tr from-amber-500/15 to-indigo-500/15 border border-amber-500/30">
+            <div className="flex items-center gap-2.5 mb-2">
+              <div className="p-2 rounded-xl bg-amber-500 text-white shadow-xs">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                  Super Admin Control Center
+                </h3>
+                <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">
+                  Authorized Administrator
+                </span>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed mb-3">
+              Verify users with blue tick badges, suspend/ban violators, broadcast live server alerts, audit conversation transcripts, and manage system message deletions.
+            </p>
+            {onNavigateToAdmin && (
+              <button
+                onClick={onNavigateToAdmin}
+                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold shadow-md shadow-amber-500/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <ShieldCheck className="w-4 h-4" />
+                <span>Launch Admin Control Center</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Demo Admin Mode Toggle for Mobile LAN testing */}
+        {currentProfile.uid.startsWith('demo_') && (
+          <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs flex items-center justify-between">
+            <div>
+              <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">Demo Admin Clearance</span>
+              <span className="text-[10px] text-zinc-400">Toggle admin access for local testing</span>
+            </div>
+            <button
+              onClick={toggleDemoAdmin}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                isAdmin ? 'bg-amber-500 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
+              }`}
+            >
+              {isAdmin ? 'Active' : 'Enable'}
+            </button>
+          </div>
+        )}
+
         {/* Theme Section */}
         <div>
           <div className="px-1 mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">

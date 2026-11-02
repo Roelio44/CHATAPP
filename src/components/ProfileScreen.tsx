@@ -22,6 +22,7 @@ import { UserProfile } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { EditProfileModal } from './EditProfileModal';
 import { db, collection, query, where, getDocs } from '../firebase/config';
+import { VerifiedBadge } from './VerifiedBadge';
 
 interface ProfileScreenProps {
   currentProfile: UserProfile;
@@ -107,9 +108,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-emerald-500 border-3 border-white dark:border-zinc-900" />
           </div>
 
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
-            {currentProfile.fullName}
-          </h2>
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+              {currentProfile.fullName}
+            </h2>
+            {currentProfile.isVerified && <VerifiedBadge size="sm" />}
+          </div>
 
           <div
             onClick={copyUserId}

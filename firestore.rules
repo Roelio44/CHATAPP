@@ -23,6 +23,26 @@ service cloud.firestore {
       return id is string && id.size() > 0 && id.size() <= 128;
     }
 
+    // Super Admin helper based on owner email and admins collection
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email == 'roeliobinance@gmail.com') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // Admins registry
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // System Alerts collection
+    match /systemAlerts/{alertId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin() && isValidId(alertId);
+    }
+
     // Users Collection
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId);
@@ -31,13 +51,23 @@ service cloud.firestore {
         && incoming().uid == request.auth.uid
         && incoming().fullName is string && incoming().fullName.size() >= 1 && incoming().fullName.size() <= 80
         && incoming().userId is string && incoming().userId.size() >= 3 && incoming().userId.size() <= 30;
-      allow update: if isSignedIn() && isValidId(userId) && request.auth.uid == userId
-        && incoming().uid == existing().uid;
+      allow update: if isSignedIn() && isValidId(userId) && (
+        isAdmin() || (
+          request.auth.uid == userId
+          && incoming().uid == existing().uid
+          // Prevent non-admin users from self-promoting or altering moderation badges
+          && (!('isVerified' in incoming()) || incoming().isVerified == existing().get('isVerified', false))
+          && (!('isBanned' in incoming()) || incoming().isBanned == existing().get('isBanned', false))
+          && (!('role' in incoming()) || incoming().role == existing().get('role', 'user'))
+        )
+      );
+      allow delete: if isAdmin() && isValidId(userId);
     }
 
     // Friend Requests Collection
     match /friendRequests/{requestId} {
       allow read: if isSignedIn() && (
+        isAdmin() ||
         resource.data.senderId == request.auth.uid ||
         resource.data.receiverId == request.auth.uid
       );
@@ -45,10 +75,12 @@ service cloud.firestore {
         && incoming().senderId == request.auth.uid
         && incoming().status == 'pending';
       allow update: if isSignedIn() && isValidId(requestId) && (
+        isAdmin() ||
         existing().receiverId == request.auth.uid ||
         existing().senderId == request.auth.uid
       );
       allow delete: if isSignedIn() && isValidId(requestId) && (
+        isAdmin() ||
         existing().senderId == request.auth.uid ||
         existing().receiverId == request.auth.uid
       );
@@ -56,38 +88,43 @@ service cloud.firestore {
 
     // Friends Collection
     match /friends/{friendId} {
-      allow read: if isSignedIn() && resource.data.uid == request.auth.uid;
+      allow read: if isSignedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
       allow create: if isSignedIn() && isValidId(friendId)
         && incoming().uid == request.auth.uid;
       allow update: if isSignedIn() && isValidId(friendId)
-        && existing().uid == request.auth.uid;
+        && (isAdmin() || existing().uid == request.auth.uid);
       allow delete: if isSignedIn() && isValidId(friendId)
-        && existing().uid == request.auth.uid;
+        && (isAdmin() || existing().uid == request.auth.uid);
     }
 
     // Chats Collection
     match /chats/{chatId} {
-      allow read: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow read: if isSignedIn() && (
+        isAdmin() ||
+        request.auth.uid in resource.data.participants
+      );
       allow create: if isSignedIn() && isValidId(chatId)
         && request.auth.uid in incoming().participants
         && incoming().participants.size() == 2;
       allow update: if isSignedIn() && isValidId(chatId)
-        && request.auth.uid in existing().participants;
+        && (isAdmin() || request.auth.uid in existing().participants);
       allow delete: if isSignedIn() && isValidId(chatId)
-        && request.auth.uid in existing().participants;
+        && (isAdmin() || request.auth.uid in existing().participants);
 
-      // Messages Subcollection (Master Gate pattern)
+      // Messages Subcollection (Master Gate pattern + Admin audit/deletion override)
       match /messages/{messageId} {
-        allow read: if isSignedIn() && isValidId(messageId)
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+        allow read: if isSignedIn() && isValidId(messageId) && (
+          isAdmin() ||
+          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
+        );
         allow create: if isSignedIn() && isValidId(messageId)
           && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
           && incoming().senderId == request.auth.uid
           && incoming().text is string && incoming().text.size() > 0 && incoming().text.size() <= 2000;
         allow update: if isSignedIn() && isValidId(messageId)
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+          && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
         allow delete: if isSignedIn() && isValidId(messageId)
-          && existing().senderId == request.auth.uid;
+          && (isAdmin() || existing().senderId == request.auth.uid);
       }
     }
   }

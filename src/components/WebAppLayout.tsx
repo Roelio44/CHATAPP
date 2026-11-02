@@ -14,11 +14,12 @@ import {
   Sun,
   Moon,
   Smartphone,
-  LogOut,
+  ShieldCheck,
 } from 'lucide-react';
 import { MainTab, UserProfile } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import { SystemAlertBanner } from './SystemAlertBanner';
 
 interface WebAppLayoutProps {
   activeTab: MainTab;
@@ -47,20 +48,30 @@ export const WebAppLayout: React.FC<WebAppLayoutProps> = ({
   sidebarContent,
   mainContent,
 }) => {
-  const { theme, setTheme, isDark } = useTheme();
-  const { logout } = useAuth();
+  const { theme, setTheme } = useTheme();
+  const { isAdmin } = useAuth();
 
   const navItems: {
     id: MainTab;
     label: string;
     icon: React.FC<{ className?: string }>;
     badge?: number;
+    isAdminOnly?: boolean;
   }[] = [
     { id: 'chats', label: 'Chats', icon: MessageSquare, badge: unreadChatsCount },
     { id: 'friends', label: 'Friends', icon: Users, badge: pendingRequestsCount },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'profile', label: 'Profile', icon: User },
   ];
+
+  if (isAdmin) {
+    navItems.push({
+      id: 'admin',
+      label: 'Admin Control Center',
+      icon: ShieldCheck,
+      isAdminOnly: true,
+    });
+  }
 
   const toggleTheme = () => {
     if (theme === 'light') setTheme('dark');
@@ -69,138 +80,163 @@ export const WebAppLayout: React.FC<WebAppLayoutProps> = ({
   };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 select-none">
-      {/* ============================================================ */}
-      {/* DESKTOP / TABLET NAVIGATION RAIL (Hidden on mobile < md)     */}
-      {/* ============================================================ */}
-      <aside className="hidden md:flex flex-col items-center justify-between w-18 lg:w-20 py-4 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800/80 z-30 shrink-0">
-        {/* Brand App Logo */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 flex items-center justify-center">
-            <MessageSquareShare className="w-6 h-6" />
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 select-none">
+      {/* Real-time platform server broadcast alert banner */}
+      <SystemAlertBanner />
+
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* ============================================================ */}
+        {/* DESKTOP / TABLET NAVIGATION RAIL (Hidden on mobile < md)     */}
+        {/* ============================================================ */}
+        <aside className="hidden md:flex flex-col items-center justify-between w-18 lg:w-20 py-4 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800/80 z-30 shrink-0">
+          {/* Brand App Logo */}
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/25 flex items-center justify-center">
+              <MessageSquareShare className="w-6 h-6" />
+            </div>
+            <span className="text-[10px] font-bold tracking-tight text-blue-600 dark:text-blue-400">
+              LinkUp
+            </span>
           </div>
-          <span className="text-[10px] font-bold tracking-tight text-blue-600 dark:text-blue-400">
-            LinkUp
-          </span>
-        </div>
 
-        {/* Center Nav Icons */}
-        <div className="flex flex-col items-center gap-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = !isSettingsOpen && activeTab === item.id;
+          {/* Center Nav Icons */}
+          <div className="flex flex-col items-center gap-2">
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = !isSettingsOpen && activeTab === item.id;
 
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  onCloseSettings();
-                  onTabChange(item.id);
-                }}
-                className={`relative p-3 rounded-2xl transition-all cursor-pointer group flex items-center justify-center ${
-                  isActive
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                    : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
-                }`}
-                title={item.label}
-              >
-                <Icon className="w-5 h-5" />
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    onCloseSettings();
+                    onTabChange(item.id);
+                  }}
+                  className={`relative p-3 rounded-2xl transition-all cursor-pointer group flex items-center justify-center ${
+                    isActive
+                      ? item.isAdminOnly
+                        ? 'bg-amber-500 text-white shadow-md shadow-amber-500/25 ring-2 ring-amber-400/40'
+                        : 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                      : item.isAdminOnly
+                      ? 'text-amber-500/90 hover:bg-amber-500/10 hover:text-amber-600 dark:hover:text-amber-400'
+                      : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                  title={item.label}
+                >
+                  <Icon className="w-5 h-5" />
 
-                {/* Badge */}
-                {item.badge && item.badge > 0 ? (
-                  <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center shadow-xs">
-                    {item.badge > 99 ? '99+' : item.badge}
+                  {/* Admin Indicator Dot */}
+                  {item.isAdminOnly && !isActive && (
+                    <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                  )}
+
+                  {/* Badge */}
+                  {item.badge && item.badge > 0 ? (
+                    <span className="absolute -top-1 -right-1 min-w-4.5 h-4.5 px-1 rounded-full bg-rose-500 text-[10px] font-bold text-white flex items-center justify-center shadow-xs">
+                      {item.badge > 99 ? '99+' : item.badge}
+                    </span>
+                  ) : null}
+
+                  {/* Tooltip on hover */}
+                  <span className="absolute left-full ml-3 px-2 py-1 rounded-md bg-zinc-800 text-white text-xs opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-md">
+                    {item.label}
                   </span>
-                ) : null}
+                </button>
+              );
+            })}
+          </div>
 
-                {/* Tooltip on hover */}
-                <span className="absolute left-full ml-3 px-2 py-1 rounded-md bg-zinc-800 text-white text-xs opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity whitespace-nowrap z-50 shadow-md">
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+          {/* Bottom Rail Actions: Settings, Theme Toggle, Profile Avatar */}
+          <div className="flex flex-col items-center gap-2.5">
+            {/* Theme switcher */}
+            <button
+              onClick={toggleTheme}
+              className="p-2.5 rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              title={`Theme: ${theme}`}
+            >
+              {theme === 'dark' ? (
+                <Moon className="w-4 h-4 text-amber-400" />
+              ) : theme === 'light' ? (
+                <Sun className="w-4 h-4 text-amber-500" />
+              ) : (
+                <Smartphone className="w-4 h-4 text-blue-500" />
+              )}
+            </button>
 
-        {/* Bottom Rail Actions: Settings, Theme Toggle, Profile Avatar */}
-        <div className="flex flex-col items-center gap-2.5">
-          {/* Theme switcher */}
-          <button
-            onClick={toggleTheme}
-            className="p-2.5 rounded-xl text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-            title={`Theme: ${theme}`}
-          >
-            {theme === 'dark' ? (
-              <Moon className="w-4 h-4 text-amber-400" />
-            ) : theme === 'light' ? (
-              <Sun className="w-4 h-4 text-amber-500" />
-            ) : (
-              <Smartphone className="w-4 h-4 text-blue-500" />
-            )}
-          </button>
+            {/* Settings button */}
+            <button
+              onClick={() => {
+                if (isSettingsOpen) onCloseSettings();
+                else onOpenSettings();
+              }}
+              className={`p-2.5 rounded-xl transition-all cursor-pointer ${
+                isSettingsOpen
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+              }`}
+              title="Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
 
-          {/* Settings button */}
-          <button
-            onClick={() => {
-              if (isSettingsOpen) onCloseSettings();
-              else onOpenSettings();
-            }}
-            className={`p-2.5 rounded-xl transition-all cursor-pointer ${
-              isSettingsOpen
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-            }`}
-            title="Settings"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
+            <div className="w-8 border-t border-zinc-200 dark:border-zinc-800 my-1" />
 
-          <div className="w-8 border-t border-zinc-200 dark:border-zinc-800 my-1" />
+            {/* User profile avatar with presence */}
+            <button
+              onClick={() => {
+                onCloseSettings();
+                onTabChange('profile');
+              }}
+              className="relative group cursor-pointer"
+              title={`${userProfile.fullName} (@${userProfile.userId})`}
+            >
+              <img
+                src={
+                  userProfile.profileImage ||
+                  `https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile.userId}`
+                }
+                alt={userProfile.fullName}
+                className="w-10 h-10 rounded-full object-cover border-2 border-zinc-200 dark:border-zinc-700 group-hover:scale-105 transition-transform"
+              />
+              <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
+            </button>
+          </div>
+        </aside>
 
-          {/* User profile avatar with presence */}
-          <button
-            onClick={() => {
-              onCloseSettings();
-              onTabChange('profile');
-            }}
-            className="relative group cursor-pointer"
-            title={`${userProfile.fullName} (@${userProfile.userId})`}
-          >
-            <img
-              src={
-                userProfile.profileImage ||
-                `https://api.dicebear.com/7.x/bottts/svg?seed=${userProfile.userId}`
-              }
-              alt={userProfile.fullName}
-              className="w-10 h-10 rounded-full object-cover border-2 border-zinc-200 dark:border-zinc-700 group-hover:scale-105 transition-transform"
-            />
-            <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-zinc-900" />
-          </button>
-        </div>
-      </aside>
+        {/* ============================================================ */}
+        {/* IF ADMIN TAB ACTIVE: RENDER ADMIN FULL WIDTH                 */}
+        {/* ============================================================ */}
+        {activeTab === 'admin' ? (
+          <div className="flex-1 flex flex-col h-full bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative">
+            {mainContent}
+          </div>
+        ) : (
+          <>
+            {/* ============================================================ */}
+            {/* DESKTOP SIDEBAR PANE / MOBILE CONTENT CONTAINER              */}
+            {/* ============================================================ */}
+            <div
+              className={`flex flex-col h-full bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800/80 z-20 shrink-0 transition-all duration-200 ${
+                activeChat
+                  ? 'hidden md:flex md:w-80 lg:w-96'
+                  : 'w-full md:w-80 lg:w-96'
+              }`}
+            >
+              {sidebarContent}
+            </div>
 
-      {/* ============================================================ */}
-      {/* DESKTOP SIDEBAR PANE / MOBILE CONTENT CONTAINER              */}
-      {/* ============================================================ */}
-      <div
-        className={`flex flex-col h-full bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800/80 z-20 shrink-0 transition-all duration-200 ${
-          activeChat
-            ? 'hidden md:flex md:w-80 lg:w-96'
-            : 'w-full md:w-80 lg:w-96'
-        }`}
-      >
-        {sidebarContent}
-      </div>
-
-      {/* ============================================================ */}
-      {/* MAIN VIEW AREA (CHAT ROOM OR EMPTY STATE CANVAS)            */}
-      {/* ============================================================ */}
-      <div
-        className={`flex-1 flex flex-col h-full bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative ${
-          activeChat ? 'flex' : 'hidden md:flex'
-        }`}
-      >
-        {mainContent}
+            {/* ============================================================ */}
+            {/* MAIN VIEW AREA (CHAT ROOM OR EMPTY STATE CANVAS)            */}
+            {/* ============================================================ */}
+            <div
+              className={`flex-1 flex flex-col h-full bg-zinc-50 dark:bg-zinc-950 overflow-hidden relative ${
+                activeChat ? 'flex' : 'hidden md:flex'
+              }`}
+            >
+              {mainContent}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

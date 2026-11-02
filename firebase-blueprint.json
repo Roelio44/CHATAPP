@@ -2,7 +2,7 @@
   "entities": {
     "User": {
       "title": "User",
-      "description": "User profile with presence, bio, and unique handle",
+      "description": "User profile with presence, bio, verification status, and moderation",
       "type": "object",
       "properties": {
         "uid": { "type": "string", "maxLength": 128 },
@@ -13,7 +13,11 @@
         "bio": { "type": "string", "maxLength": 240 },
         "isOnline": { "type": "boolean" },
         "lastSeen": { "type": "string", "format": "date-time" },
-        "createdAt": { "type": "string", "format": "date-time" }
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isVerified": { "type": "boolean" },
+        "isBanned": { "type": "boolean" },
+        "banReason": { "type": "string", "maxLength": 500 },
+        "role": { "type": "string", "enum": ["user", "admin"] }
       },
       "required": ["uid", "fullName", "email", "userId", "isOnline"]
     },
@@ -79,6 +83,21 @@
         "replyTo": { "type": "object" }
       },
       "required": ["chatId", "senderId", "text", "seen", "delivered"]
+    },
+    "SystemAlert": {
+      "title": "SystemAlert",
+      "description": "Global server alert and announcements broadcast by admin",
+      "type": "object",
+      "properties": {
+        "alertId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "message": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "type": { "type": "string", "enum": ["info", "warning", "urgent", "announcement"] },
+        "isActive": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string", "maxLength": 128 }
+      },
+      "required": ["title", "message", "type", "isActive"]
     }
   },
   "firestore": {
@@ -101,6 +120,10 @@
     "/chats/{chatId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/Message" },
       "description": "Messages subcollection in a chat"
+    },
+    "/systemAlerts/{alertId}": {
+      "schema": { "$ref": "#/entities/SystemAlert" },
+      "description": "System broadcast messages created by admins"
     }
   }
 }

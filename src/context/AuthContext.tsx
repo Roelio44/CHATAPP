@@ -18,6 +18,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  onSnapshot,
   serverTimestamp,
   collection,
   query,
@@ -27,12 +28,15 @@ import {
   OperationType,
 } from '../firebase/config';
 import { UserProfile } from '../types';
+import { SUPER_ADMIN_EMAIL, isUserAdmin } from '../services/adminService';
 
 interface AuthContextType {
   currentUser: User | null;
   userProfile: UserProfile | null;
   loading: boolean;
   needsProfileSetup: boolean;
+  isAdmin: boolean;
+  toggleDemoAdmin: () => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, fullName: string) => Promise<void>;
@@ -58,34 +62,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [needsProfileSetup, setNeedsProfileSetup] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [demoAdminOverride, setDemoAdminOverride] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('linkup_demo_admin_override') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleDemoAdmin = () => {
+    const next = !demoAdminOverride;
+    setDemoAdminOverride(next);
+    try {
+      localStorage.setItem('linkup_demo_admin_override', String(next));
+    } catch {}
+  };
+
+  const isAdmin = Boolean(
+    isUserAdmin(currentUser?.email, userProfile?.role) ||
+    (currentUser?.email && currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) ||
+    demoAdminOverride
+  );
 
   // Fetch or listen to user profile
   useEffect(() => {
+    let profileUnsub: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthError(null);
+      if (profileUnsub) {
+        profileUnsub();
+        profileUnsub = null;
+      }
+
       if (user) {
         // Clear any leftover demo session
         localStorage.removeItem('linkup_demo_session');
         setCurrentUser(user);
         try {
           const userDocRef = doc(db, 'users', user.uid);
-          const snap = await getDoc(userDocRef);
-          if (snap.exists()) {
-            const data = snap.data() as UserProfile;
-            setUserProfile(data);
-            setNeedsProfileSetup(false);
-            // Mark online
-            await updateDoc(userDocRef, {
-              isOnline: true,
-              lastSeen: serverTimestamp(),
-            }).catch(() => {});
-          } else {
-            setUserProfile(null);
-            setNeedsProfileSetup(true);
-          }
+          profileUnsub = onSnapshot(
+            userDocRef,
+            (snap) => {
+              if (snap.exists()) {
+                const data = snap.data() as UserProfile;
+                setUserProfile(data);
+                setNeedsProfileSetup(false);
+              } else {
+                setUserProfile(null);
+                setNeedsProfileSetup(true);
+              }
+              setLoading(false);
+            },
+            (err) => {
+              console.error('Error listening to user profile:', err);
+              handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+              setLoading(false);
+            }
+          );
+
+          // Mark online
+          await updateDoc(userDocRef, {
+            isOnline: true,
+            lastSeen: serverTimestamp(),
+          }).catch(() => {});
         } catch (err) {
           console.error('Error fetching user profile:', err);
           handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
+          setLoading(false);
         }
       } else {
         // Check if there is an active local demo session (e.g. for mobile testing without OAuth)
@@ -106,11 +150,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCurrentUser(null);
         setUserProfile(null);
         setNeedsProfileSetup(false);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => {
+      if (profileUnsub) profileUnsub();
+      unsubscribe();
+    };
   }, []);
 
   // Presence management: handle tab blur, close, visibility change
@@ -390,6 +437,8 @@ Or click "Instant Demo Account (1-Click Test)" above to test immediately!`;
         userProfile,
         loading,
         needsProfileSetup,
+        isAdmin,
+        toggleDemoAdmin,
         loginWithGoogle,
         loginWithEmail,
         signUpWithEmail,
