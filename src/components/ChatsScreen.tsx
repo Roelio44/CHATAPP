@@ -53,6 +53,19 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
   useEffect(() => {
     if (!currentProfile.uid) return;
 
+    // Check for demo mode session
+    if (currentProfile.uid.startsWith('demo_')) {
+      const loadDemo = () => {
+        import('../services/demoService').then(({ getDemoChats }) => {
+          setChats(getDemoChats());
+          setLoading(false);
+        });
+      };
+      loadDemo();
+      window.addEventListener('linkup_demo_chats_updated', loadDemo);
+      return () => window.removeEventListener('linkup_demo_chats_updated', loadDemo);
+    }
+
     const chatsRef = collection(db, 'chats');
     const q = query(
       chatsRef,

@@ -58,6 +58,18 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   useEffect(() => {
     if (!chatId) return;
 
+    if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
+      const load = () => {
+        import('../services/demoService').then(({ getDemoMessages }) => {
+          setMessages(getDemoMessages(chatId));
+        });
+      };
+      load();
+      const handler = () => load();
+      window.addEventListener(`linkup_demo_msg_${chatId}`, handler);
+      return () => window.removeEventListener(`linkup_demo_msg_${chatId}`, handler);
+    }
+
     const messagesRef = collection(db, 'chats', chatId, 'messages');
     const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
@@ -117,6 +129,14 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
     setReplyingTo(null);
     setShowEmojiPicker(false);
     setIsSending(true);
+
+    if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
+      const { sendDemoMessage } = await import('../services/demoService');
+      sendDemoMessage(chatId, currentUser.uid, text, replyMeta);
+      setIsSending(false);
+      inputRef.current?.focus();
+      return;
+    }
 
     try {
       await sendMessage(

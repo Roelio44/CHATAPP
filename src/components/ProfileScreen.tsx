@@ -41,6 +41,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   useEffect(() => {
     if (!currentProfile.uid) return;
 
+    if (currentProfile.uid.startsWith('demo_')) {
+      setFriendsCount(3);
+      setChatsCount(3);
+      return;
+    }
+
     // Fetch friend count
     const fetchStats = async () => {
       try {

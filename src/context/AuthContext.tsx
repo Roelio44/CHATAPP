@@ -64,6 +64,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setAuthError(null);
       if (user) {
+        // Clear any leftover demo session
+        localStorage.removeItem('linkup_demo_session');
         setCurrentUser(user);
         try {
           const userDocRef = doc(db, 'users', user.uid);
@@ -86,6 +88,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           handleFirestoreError(err, OperationType.GET, `users/${user.uid}`);
         }
       } else {
+        // Check if there is an active local demo session (e.g. for mobile testing without OAuth)
+        try {
+          const savedDemo = localStorage.getItem('linkup_demo_session');
+          if (savedDemo) {
+            const parsed = JSON.parse(savedDemo);
+            if (parsed?.user && parsed?.profile) {
+              setCurrentUser(parsed.user);
+              setUserProfile(parsed.profile);
+              setNeedsProfileSetup(false);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {}
+
         setCurrentUser(null);
         setUserProfile(null);
         setNeedsProfileSetup(false);
@@ -98,7 +115,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Presence management: handle tab blur, close, visibility change
   useEffect(() => {
-    if (!currentUser?.uid || needsProfileSetup) return;
+    if (!currentUser?.uid || needsProfileSetup || currentUser.uid.startsWith('demo_')) return;
 
     const uid = currentUser.uid;
     const userDocRef = doc(db, 'users', uid);
@@ -144,9 +161,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const code = err?.code || '';
       if (code === 'auth/unauthorized-domain') {
         const domain = typeof window !== 'undefined' ? window.location.hostname : 'this domain';
-        msg = `Domain not authorized for Google OAuth: "${domain}". Please use the Email login below to sign in instantly, or add "${domain}" in Firebase Console > Authentication > Settings > Authorized Domains.`;
+        msg = `Domain not authorized in Firebase: "${domain}".
+
+To sign in with Google from your phone (http://${domain}:3000):
+1. Go to Firebase Console (https://console.firebase.google.com/project/gen-lang-client-0535223300/authentication/settings)
+2. Under "Authorized domains", click "Add domain" and add "${domain}"
+3. Save and refresh.
+
+💡 Instant alternative: Click "Instant Demo Account (1-Click Test)" below to explore the app immediately without any setup!`;
       } else if (code === 'auth/popup-blocked') {
-        msg = 'Sign-in popup was blocked by your browser. Please allow popups for this site, or use the Email login below.';
+        msg = 'Sign-in popup was blocked by your browser. Please allow popups for this site, or use the Instant Demo Account button.';
       } else if (code === 'auth/popup-closed-by-user') {
         msg = 'Sign-in was cancelled (the Google popup was closed before completion).';
       } else if (code === 'auth/cancelled-popup-request') {
@@ -159,23 +183,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const loginDemoAccount = async (demoEmail = 'dhiraj.demo@linkup.app') => {
+  const loginDemoAccount = async (demoEmail = 'demo@linkup.app') => {
     setAuthError(null);
+    // 1. Try Firebase Auth if email provider is enabled
     try {
-      // Try login first, if user doesn't exist, create it
       await signInWithEmailAndPassword(auth, demoEmail, 'linkup123456');
+      return;
     } catch (err: any) {
       if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential') {
         try {
           await createUserWithEmailAndPassword(auth, demoEmail, 'linkup123456');
           setNeedsProfileSetup(true);
+          return;
         } catch (createErr: any) {
-          setAuthError(createErr.message || 'Failed to initialize demo account');
+          // If operation-not-allowed, fall through to instant local session
         }
-      } else {
-        setAuthError(err.message || 'Failed to sign in with demo account');
       }
     }
+
+    // 2. Instant Local Demo Session (works 100% reliably on local IP 192.168.0.227 and all mobile devices)
+    const demoUser = {
+      uid: 'demo_user_linkup',
+      email: demoEmail,
+      displayName: 'Demo User',
+      photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+      emailVerified: true,
+    } as any;
+
+    const demoProfile: UserProfile = {
+      uid: 'demo_user_linkup',
+      fullName: 'Demo User',
+      email: demoEmail,
+      userId: 'demouser',
+      profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=200&auto=format&fit=crop&q=80',
+      bio: 'Testing LinkUp Messenger on mobile device',
+      isOnline: true,
+      lastSeen: new Date(),
+      createdAt: new Date(),
+    };
+
+    try {
+      localStorage.setItem('linkup_demo_session', JSON.stringify({ user: demoUser, profile: demoProfile }));
+    } catch (e) {}
+
+    setCurrentUser(demoUser);
+    setUserProfile(demoProfile);
+    setNeedsProfileSetup(false);
   };
 
   const loginWithEmail = async (email: string, pass: string) => {
@@ -185,7 +238,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error('Email login failed', err);
       let msg = 'Failed to sign in. Please verify your credentials.';
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
+      if (err.code === 'auth/operation-not-allowed') {
+        msg = `Email/Password sign-in is disabled in your Firebase project.
+
+To enable it:
+1. Open Firebase Console (https://console.firebase.google.com/project/gen-lang-client-0535223300/authentication/providers)
+2. Click "Email/Password" and toggle "Enable"
+3. Click Save.
+
+Or click "Instant Demo Account (1-Click Test)" above to test immediately!`;
+      } else if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
         msg = 'Incorrect email or password.';
       } else if (err.code === 'auth/user-not-found') {
         msg = 'No user found with this email.';
@@ -206,7 +268,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err: any) {
       console.error('Email sign up failed', err);
       let msg = 'Sign up failed.';
-      if (err.code === 'auth/email-already-in-use') {
+      if (err.code === 'auth/operation-not-allowed') {
+        msg = `Email/Password account creation is disabled in your Firebase project.
+
+To enable it:
+1. Open Firebase Console (https://console.firebase.google.com/project/gen-lang-client-0535223300/authentication/providers)
+2. Click "Email/Password" and toggle "Enable"
+3. Click Save.
+
+Or click "Instant Demo Account (1-Click Test)" above to test immediately!`;
+      } else if (err.code === 'auth/email-already-in-use') {
         msg = 'An account with this email already exists.';
       } else if (err.code === 'auth/weak-password') {
         msg = 'Password should be at least 6 characters.';
@@ -217,7 +288,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = async () => {
-    if (currentUser?.uid) {
+    localStorage.removeItem('linkup_demo_session');
+    if (currentUser?.uid && !currentUser.uid.startsWith('demo_')) {
       try {
         await updateDoc(doc(db, 'users', currentUser.uid), {
           isOnline: false,
@@ -227,7 +299,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // proceed to sign out
       }
     }
-    await signOut(auth);
+    await signOut(auth).catch(() => {});
     setUserProfile(null);
     setCurrentUser(null);
     setNeedsProfileSetup(false);
@@ -287,6 +359,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateUserProfile = async (data: Partial<UserProfile>) => {
     if (!currentUser) throw new Error('No authenticated user');
+
+    if (currentUser.uid.startsWith('demo_')) {
+      const updated = { ...userProfile, ...data } as UserProfile;
+      setUserProfile(updated);
+      try {
+        const saved = JSON.parse(localStorage.getItem('linkup_demo_session') || '{}');
+        saved.profile = updated;
+        localStorage.setItem('linkup_demo_session', JSON.stringify(saved));
+      } catch (e) {}
+      return;
+    }
+
     const userDocRef = doc(db, 'users', currentUser.uid);
 
     try {

@@ -52,6 +52,21 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
     setError(null);
     setHasSearched(true);
 
+    if (currentUser.uid.startsWith('demo_')) {
+      const { DEMO_USERS } = await import('../services/demoService');
+      const matches = DEMO_USERS.filter(
+        (u) =>
+          u.userId.toLowerCase().includes(term.toLowerCase()) ||
+          u.fullName.toLowerCase().includes(term.toLowerCase())
+      ).map((u) => ({
+        ...u,
+        friendshipStatus: (u.uid === 'demo_contact_1' ? 'friends' : 'none') as FriendshipStatus,
+      }));
+      setResults(matches);
+      setIsSearching(false);
+      return;
+    }
+
     try {
       const usersFound = await searchUsers(term, currentUser.uid);
 

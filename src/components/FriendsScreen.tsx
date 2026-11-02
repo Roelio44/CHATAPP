@@ -60,6 +60,24 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({
   useEffect(() => {
     if (!currentProfile.uid) return;
 
+    if (currentProfile.uid.startsWith('demo_')) {
+      import('../services/demoService').then(({ DEMO_USERS }) => {
+        const demoFriends = DEMO_USERS.map((u, i) => ({
+          id: `friend_${i}`,
+          uid: currentProfile.uid,
+          friendUid: u.uid,
+          friendName: u.fullName,
+          friendUserId: u.userId,
+          friendProfileImage: u.profileImage,
+          createdAt: new Date(),
+          userProfile: u,
+        }));
+        setFriends(demoFriends);
+        setLoadingFriends(false);
+      });
+      return;
+    }
+
     const friendsRef = collection(db, 'friends');
     const q = query(friendsRef, where('uid', '==', currentProfile.uid));
 
@@ -101,6 +119,23 @@ export const FriendsScreen: React.FC<FriendsScreenProps> = ({
   // Real-time listener for friend requests (both incoming & outgoing)
   useEffect(() => {
     if (!currentProfile.uid) return;
+
+    if (currentProfile.uid.startsWith('demo_')) {
+      setIncomingRequests([
+        {
+          id: 'req_1',
+          senderId: 'user_david',
+          receiverId: currentProfile.uid,
+          status: 'pending',
+          senderName: 'David Kim',
+          senderUserId: 'david_k',
+          senderProfileImage: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&auto=format&fit=crop&q=80',
+          createdAt: new Date(),
+        },
+      ]);
+      setLoadingRequests(false);
+      return;
+    }
 
     const requestsRef = collection(db, 'friendRequests');
 

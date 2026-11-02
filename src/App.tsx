@@ -65,6 +65,19 @@ function MainApp() {
   useEffect(() => {
     if (!userProfile?.uid) return;
 
+    if (userProfile.uid.startsWith('demo_')) {
+      const updateDemoCount = () => {
+        import('./services/demoService').then(({ getDemoChats }) => {
+          const chats = getDemoChats();
+          const unread = chats.filter((c) => (c.unreadCount?.[userProfile.uid] || 0) > 0).length;
+          setUnreadChatsCount(unread);
+        });
+      };
+      updateDemoCount();
+      window.addEventListener('linkup_demo_chats_updated', updateDemoCount);
+      return () => window.removeEventListener('linkup_demo_chats_updated', updateDemoCount);
+    }
+
     const chatsRef = collection(db, 'chats');
     const q = query(chatsRef, where('participants', 'array-contains', userProfile.uid));
 
@@ -86,6 +99,11 @@ function MainApp() {
   // Listen to pending requests count for badge
   useEffect(() => {
     if (!userProfile?.uid) return;
+
+    if (userProfile.uid.startsWith('demo_')) {
+      setPendingRequestsCount(1);
+      return;
+    }
 
     const reqRef = collection(db, 'friendRequests');
     const q = query(
