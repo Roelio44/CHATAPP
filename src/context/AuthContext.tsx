@@ -36,12 +36,9 @@ interface AuthContextType {
   loading: boolean;
   needsProfileSetup: boolean;
   isAdmin: boolean;
-  toggleDemoAdmin: () => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (email: string, pass: string, fullName: string) => Promise<void>;
-  loginDemoAccount: (email?: string) => Promise<void>;
-  loginDirectAnyIp: (email?: string, name?: string) => Promise<void>;
   logout: () => Promise<void>;
   createUserProfile: (data: {
     fullName: string;
@@ -63,26 +60,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState<boolean>(true);
   const [needsProfileSetup, setNeedsProfileSetup] = useState<boolean>(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [demoAdminOverride, setDemoAdminOverride] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('linkup_demo_admin_override') === 'true';
-    } catch {
-      return false;
-    }
-  });
 
-  const toggleDemoAdmin = () => {
-    const next = !demoAdminOverride;
-    setDemoAdminOverride(next);
-    try {
-      localStorage.setItem('linkup_demo_admin_override', String(next));
-    } catch {}
-  };
-
+  // Super Admin: ONLY roeliobinance@gmail.com has access
   const isAdmin = Boolean(
-    isUserAdmin(currentUser?.email, userProfile?.role) ||
-    (currentUser?.email && currentUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) ||
-    demoAdminOverride
+    currentUser?.email && currentUser.email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()
   );
 
   // Fetch or listen to user profile
@@ -97,8 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (user) {
-        // Clear any leftover demo session
-        localStorage.removeItem('linkup_demo_session');
         setCurrentUser(user);
         try {
           const userDocRef = doc(db, 'users', user.uid);
@@ -107,11 +86,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             (snap) => {
               if (snap.exists()) {
                 const data = snap.data() as UserProfile;
+                // If it is roeliobinance@gmail.com, ensure they are marked as admin and verified
+                if (user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+                  if (data.role !== 'admin' || !data.isVerified) {
+                    data.role = 'admin';
+                    data.isVerified = true;
+                    updateDoc(userDocRef, { role: 'admin', isVerified: true }).catch(() => {});
+                  }
+                }
                 setUserProfile(data);
                 setNeedsProfileSetup(false);
               } else {
-                setUserProfile(null);
-                setNeedsProfileSetup(true);
+                // If the user logging in with Google is roeliobinance@gmail.com, auto-initialize their profile!
+                if (user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+                  const adminProfile: UserProfile = {
+                    uid: user.uid,
+                    fullName: user.displayName || 'Roelio',
+                    email: user.email,
+                    userId: 'roeliobinance',
+                    profileImage: user.photoURL || `https://api.dicebear.com/7.x/bottts/svg?seed=roeliobinance`,
+                    bio: 'Super Administrator',
+                    isOnline: true,
+                    lastSeen: serverTimestamp(),
+                    createdAt: serverTimestamp(),
+                    isVerified: true,
+                    role: 'admin',
+                  };
+                  setDoc(userDocRef, adminProfile).catch(() => {});
+                  setUserProfile(adminProfile);
+                  setNeedsProfileSetup(false);
+                } else {
+                  setUserProfile(null);
+                  setNeedsProfileSetup(true);
+                }
               }
               setLoading(false);
             },
@@ -133,21 +140,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setLoading(false);
         }
       } else {
-        // Check if there is an active local demo session (e.g. for mobile testing without OAuth)
-        try {
-          const savedDemo = localStorage.getItem('linkup_demo_session');
-          if (savedDemo) {
-            const parsed = JSON.parse(savedDemo);
-            if (parsed?.user && parsed?.profile) {
-              setCurrentUser(parsed.user);
-              setUserProfile(parsed.profile);
-              setNeedsProfileSetup(false);
-              setLoading(false);
-              return;
-            }
-          }
-        } catch (e) {}
-
         setCurrentUser(null);
         setUserProfile(null);
         setNeedsProfileSetup(false);
@@ -160,6 +152,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubscribe();
     };
   }, []);
+
 
   // Presence management: handle tab blur, close, visibility change
   useEffect(() => {
@@ -409,12 +402,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         needsProfileSetup,
         isAdmin,
-        toggleDemoAdmin,
         loginWithGoogle,
         loginWithEmail,
         signUpWithEmail,
-        loginDemoAccount,
-        loginDirectAnyIp,
         logout,
         createUserProfile,
         updateUserProfile,

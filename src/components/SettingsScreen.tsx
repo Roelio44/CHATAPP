@@ -34,7 +34,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onNavigateToAdmin,
 }) => {
   const { theme, setTheme, isDark } = useTheme();
-  const { logout, isAdmin, toggleDemoAdmin } = useAuth();
+  const { logout, isAdmin } = useAuth();
 
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
@@ -106,23 +106,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         )}
 
-        {/* Demo Admin Mode Toggle for Mobile LAN testing */}
-        {currentProfile.uid.startsWith('demo_') && (
-          <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs flex items-center justify-between">
-            <div>
-              <span className="font-semibold text-zinc-800 dark:text-zinc-200 block">Demo Admin Clearance</span>
-              <span className="text-[10px] text-zinc-400">Toggle admin access for local testing</span>
-            </div>
-            <button
-              onClick={toggleDemoAdmin}
-              className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                isAdmin ? 'bg-amber-500 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-              }`}
-            >
-              {isAdmin ? 'Active' : 'Enable'}
-            </button>
-          </div>
-        )}
+
 
         {/* Theme Section */}
         <div>
