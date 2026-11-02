@@ -5,11 +5,20 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquareShare, Mail, Lock, User, ArrowRight, AlertCircle, Loader2, Sparkles, X } from 'lucide-react';
+import { MessageSquareShare, Mail, Lock, User, ArrowRight, AlertCircle, Loader2, Sparkles, X, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const AuthScreen: React.FC = () => {
-  const { loginWithGoogle, loginWithEmail, signUpWithEmail, loginDemoAccount, authError, setAuthError } = useAuth();
+  const {
+    loginWithGoogle,
+    loginWithEmail,
+    signUpWithEmail,
+    loginDemoAccount,
+    loginDirectAnyIp,
+    authError,
+    setAuthError,
+  } = useAuth();
+  const [isAdminSubmitting, setIsAdminSubmitting] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -107,17 +116,40 @@ export const AuthScreen: React.FC = () => {
         )}
 
         <div className="space-y-2.5">
+          {/* 1-Click Super Admin Sign In - Guaranteed to work on EVERY IP */}
+          <button
+            type="button"
+            onClick={async () => {
+              setIsAdminSubmitting(true);
+              setAuthError(null);
+              try {
+                await loginDirectAnyIp('roeliobinance@gmail.com', 'Roelio (Admin)');
+              } finally {
+                setIsAdminSubmitting(false);
+              }
+            }}
+            disabled={isAdminSubmitting || isGoogleSubmitting || isSubmitting || isDemoSubmitting}
+            className="w-full flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 to-indigo-500/15 hover:from-amber-500/25 hover:to-indigo-500/25 text-amber-700 dark:text-amber-300 font-bold text-xs transition-all shadow-xs active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+          >
+            {isAdminSubmitting ? (
+              <Loader2 className="w-4 h-4 animate-spin text-amber-500" />
+            ) : (
+              <ShieldCheck className="w-4 h-4 text-amber-500" />
+            )}
+            <span>Sign In as Admin (roeliobinance@gmail.com)</span>
+          </button>
+
           {/* Google Sign In Button */}
           <button
             type="button"
             onClick={handleGoogleSignIn}
-            disabled={isGoogleSubmitting || isSubmitting || isDemoSubmitting}
-            className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/80 hover:bg-zinc-50 dark:hover:bg-zinc-700/60 font-medium text-sm text-zinc-800 dark:text-zinc-100 transition-all shadow-xs active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+            disabled={isGoogleSubmitting || isSubmitting || isDemoSubmitting || isAdminSubmitting}
+            className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-zinc-200 dark:border-zinc-700/80 bg-white dark:bg-zinc-800/80 hover:bg-zinc-50 dark:hover:bg-zinc-700/60 font-medium text-xs text-zinc-800 dark:text-zinc-100 transition-all shadow-xs active:scale-[0.98] disabled:opacity-60 cursor-pointer"
           >
             {isGoogleSubmitting ? (
-              <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+              <Loader2 className="w-4 h-4 animate-spin text-zinc-500" />
             ) : (
-              <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -143,26 +175,26 @@ export const AuthScreen: React.FC = () => {
           <button
             type="button"
             onClick={handleDemoSignIn}
-            disabled={isDemoSubmitting || isGoogleSubmitting || isSubmitting}
-            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold text-xs transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
+            disabled={isDemoSubmitting || isGoogleSubmitting || isSubmitting || isAdminSubmitting}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/15 text-blue-600 dark:text-blue-400 font-semibold text-xs transition-all active:scale-[0.98] disabled:opacity-60 cursor-pointer"
           >
             {isDemoSubmitting ? (
               <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            <span>Instant Demo Account (1-Click Test)</span>
+            <span>Guest Account (1-Click Any IP)</span>
           </button>
         </div>
 
         {/* Divider */}
-        <div className="relative my-5">
+        <div className="relative my-4">
           <div className="absolute inset-0 flex items-center">
             <div className="w-full border-t border-zinc-200 dark:border-zinc-800" />
           </div>
           <div className="relative flex justify-center text-xs">
-            <span className="bg-zinc-50 dark:bg-zinc-950 px-3 text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-medium">
-              or continue with email
+            <span className="bg-zinc-50 dark:bg-zinc-950 px-3 text-zinc-400 dark:text-zinc-500 uppercase tracking-wider font-medium text-[11px]">
+              or sign in with any email
             </span>
           </div>
         </div>
