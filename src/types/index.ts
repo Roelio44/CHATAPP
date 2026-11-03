@@ -63,6 +63,7 @@ export interface Message {
   chatId: string;
   senderId: string;
   text: string;
+  imageUrl?: string;
   timestamp: any;
   seen: boolean;
   delivered: boolean;

@@ -126,7 +126,9 @@ service cloud.firestore {
         allow list: if isSignedIn();
         allow create: if isSignedIn() && isValidId(messageId)
           && incoming().senderId == request.auth.uid
-          && incoming().text is string && incoming().text.size() > 0 && incoming().text.size() <= 2000;
+          && incoming().text is string && incoming().text.size() <= 2000
+          && (!('imageUrl' in incoming()) || (incoming().imageUrl is string && incoming().imageUrl.size() <= 200000))
+          && (incoming().text.size() > 0 || ('imageUrl' in incoming() && incoming().imageUrl.size() > 0));
         allow update: if isSignedIn() && isValidId(messageId)
           && (isAdmin() || incoming().senderId == request.auth.uid || ('seen' in incoming()));
         allow delete: if isSignedIn() && isValidId(messageId)

@@ -176,14 +176,17 @@ export function sendDemoMessage(
   chatId: string,
   senderId: string,
   text: string,
-  replyTo?: { id: string; text: string; senderName: string }
+  replyTo?: { id: string; text: string; senderName: string },
+  imageUrl?: string
 ): Message {
   const current = getDemoMessages(chatId);
+  const preview = text.trim() || (imageUrl ? '📷 Photo' : '');
   const newMsg: Message = {
     id: `msg_${Date.now()}`,
     chatId,
     senderId,
     text: text.trim(),
+    imageUrl,
     timestamp: new Date(),
     seen: false,
     delivered: true,
@@ -198,7 +201,7 @@ export function sendDemoMessage(
   const chats = getDemoChats();
   const targetIndex = chats.findIndex((c) => c.id === chatId);
   if (targetIndex >= 0) {
-    chats[targetIndex].lastMessage = text.trim();
+    chats[targetIndex].lastMessage = preview;
     chats[targetIndex].lastSenderId = senderId;
     chats[targetIndex].lastMessageTime = new Date();
     saveDemoChats(chats);

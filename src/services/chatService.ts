@@ -59,12 +59,16 @@ export async function sendMessage(
   senderId: string,
   receiverId: string,
   text: string,
-  replyTo?: { id: string; text: string; senderName: string }
+  replyTo?: { id: string; text: string; senderName: string },
+  imageUrl?: string
 ): Promise<string> {
-  if (!text.trim()) return '';
+  const trimmedText = text.trim();
+  if (!trimmedText && !imageUrl) return '';
 
   const messagesRef = collection(db, 'chats', chatId, 'messages');
   const chatRef = doc(db, 'chats', chatId);
+
+  const previewText = trimmedText || (imageUrl ? '📷 Photo' : '');
 
   try {
     // 0. Ensure the parent chat document exists with both participants
@@ -73,7 +77,7 @@ export async function sendMessage(
       await setDoc(chatRef, {
         chatId,
         participants: [senderId, receiverId],
-        lastMessage: text.trim(),
+        lastMessage: previewText,
         lastSenderId: senderId,
         lastMessageTime: serverTimestamp(),
         pinnedBy: [],
@@ -87,15 +91,21 @@ export async function sendMessage(
     }
 
     // 1. Add message document to subcollection
-    const msgDoc = await addDoc(messagesRef, {
+    const messagePayload: any = {
       chatId,
       senderId,
-      text: text.trim(),
+      text: trimmedText,
       timestamp: serverTimestamp(),
       delivered: true,
       seen: false,
       replyTo: replyTo || null,
-    });
+    };
+
+    if (imageUrl) {
+      messagePayload.imageUrl = imageUrl;
+    }
+
+    const msgDoc = await addDoc(messagesRef, messagePayload);
 
     // 2. Update chat parent doc
     let currentUnread = 0;
@@ -105,7 +115,7 @@ export async function sendMessage(
     }
 
     await updateDoc(chatRef, {
-      lastMessage: text.trim(),
+      lastMessage: previewText,
       lastSenderId: senderId,
       lastMessageTime: serverTimestamp(),
       updatedAt: serverTimestamp(),

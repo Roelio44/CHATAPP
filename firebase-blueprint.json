@@ -70,19 +70,20 @@
     },
     "Message": {
       "title": "Message",
-      "description": "Real-time chat message",
+      "description": "Real-time chat message with support for text and photos",
       "type": "object",
       "properties": {
         "messageId": { "type": "string", "maxLength": 128 },
         "chatId": { "type": "string", "maxLength": 128 },
         "senderId": { "type": "string", "maxLength": 128 },
-        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "text": { "type": "string", "maxLength": 2000 },
+        "imageUrl": { "type": "string", "maxLength": 200000 },
         "timestamp": { "type": "string", "format": "date-time" },
         "seen": { "type": "boolean" },
         "delivered": { "type": "boolean" },
         "replyTo": { "type": "object" }
       },
-      "required": ["chatId", "senderId", "text", "seen", "delivered"]
+      "required": ["chatId", "senderId", "seen", "delivered"]
     },
     "SystemAlert": {
       "title": "SystemAlert",

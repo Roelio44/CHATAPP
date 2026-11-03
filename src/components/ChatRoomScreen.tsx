@@ -17,6 +17,10 @@ import {
   Paperclip,
   Phone,
   Video,
+  Image as ImageIcon,
+  ZoomIn,
+  Download,
+  Loader2,
 } from 'lucide-react';
 import {
   db,
@@ -32,6 +36,7 @@ import { sendMessage, markMessagesAsSeen } from '../services/chatService';
 import { formatMessageTime, formatLastSeen } from '../utils/formatTime';
 import { VerifiedBadge } from './VerifiedBadge';
 import { CallModal, CallType } from './CallModal';
+import { compressImageFile } from '../utils/imageCompressor';
 
 interface ChatRoomScreenProps {
   chatId: string;
@@ -50,12 +55,16 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeCall, setActiveCall] = useState<CallType | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Real-time messages listener
   useEffect(() => {
@@ -86,6 +95,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             chatId,
             senderId: data.senderId,
             text: data.text || '',
+            imageUrl: data.imageUrl || undefined,
             timestamp: data.timestamp,
             seen: data.seen ?? false,
             delivered: data.delivered ?? true,
@@ -145,15 +155,41 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
     } catch (e) {}
   };
 
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file (JPG, PNG, WebP, etc.).');
+      return;
+    }
+
+    try {
+      setIsCompressing(true);
+      // Canvas compression produces a lightweight, optimized ~40-60KB JPEG base64 string
+      const compressedDataUrl = await compressImageFile(file, 900, 0.68);
+      setSelectedPhoto(compressedDataUrl);
+      inputRef.current?.focus();
+    } catch (err) {
+      console.error('Image compression failed:', err);
+    } finally {
+      setIsCompressing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputText.trim() || isSending) return;
+    if ((!inputText.trim() && !selectedPhoto) || isSending || isCompressing) return;
 
     const text = inputText;
+    const photoToSend = selectedPhoto;
     const replyMeta = replyingTo
       ? {
           id: replyingTo.id,
-          text: replyingTo.text,
+          text: replyingTo.text || (replyingTo.imageUrl ? '📷 Photo' : ''),
           senderName:
             replyingTo.senderId === currentUser.uid
               ? 'You'
@@ -162,13 +198,14 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       : undefined;
 
     setInputText('');
+    setSelectedPhoto(null);
     setReplyingTo(null);
     setShowEmojiPicker(false);
     setIsSending(true);
 
     if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
       const { sendDemoMessage } = await import('../services/demoService');
-      sendDemoMessage(chatId, currentUser.uid, text, replyMeta);
+      sendDemoMessage(chatId, currentUser.uid, text, replyMeta, photoToSend || undefined);
       setIsSending(false);
       inputRef.current?.focus();
       return;
@@ -180,7 +217,8 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         currentUser.uid,
         otherUser.uid,
         text,
-        replyMeta
+        replyMeta,
+        photoToSend || undefined
       );
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -328,10 +366,31 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                     </div>
                   )}
 
+                  {/* Attached photo if present */}
+                  {msg.imageUrl && (
+                    <div
+                      onClick={() => setViewingPhotoUrl(msg.imageUrl || null)}
+                      className="mb-2 relative rounded-xl overflow-hidden cursor-pointer group/photo bg-black/5 dark:bg-black/30"
+                    >
+                      <img
+                        src={msg.imageUrl}
+                        alt="Shared photo"
+                        loading="lazy"
+                        className="w-full max-h-72 object-cover rounded-xl transition-transform duration-200 group-hover/photo:scale-[1.02]"
+                      />
+                      <div className="absolute inset-0 bg-black/30 opacity-0 group-hover/photo:opacity-100 transition-opacity flex items-center justify-center gap-1.5 text-white text-xs font-medium">
+                        <ZoomIn className="w-4 h-4" />
+                        <span>Tap to view full</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Message Text */}
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                    {msg.text}
-                  </p>
+                  {msg.text && (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      {msg.text}
+                    </p>
+                  )}
 
                   {/* Time & Delivery Status Indicator */}
                   <div
@@ -394,6 +453,34 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         </motion.div>
       )}
 
+      {/* Attached Photo Preview Above Input */}
+      {selectedPhoto && (
+        <div className="px-4 py-2 bg-blue-50/90 dark:bg-zinc-900 border-t border-blue-200/60 dark:border-zinc-800">
+          <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-blue-300 dark:border-zinc-700 shrink-0 bg-black/10">
+                <img src={selectedPhoto} alt="Attachment" className="w-full h-full object-cover" />
+              </div>
+              <div className="text-xs">
+                <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                  <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  Photo attached
+                </span>
+                <span className="text-zinc-500 text-[11px]">Type an optional caption below and press Send</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedPhoto(null)}
+              className="p-1.5 rounded-full text-zinc-400 hover:text-red-500 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              title="Remove photo"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Reply Preview Above Input */}
       {replyingTo && (
         <div className="px-4 py-2 bg-zinc-100 dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800">
@@ -406,7 +493,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                   {replyingTo.senderId === currentUser.uid ? 'yourself' : otherUser.fullName}
                 </span>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
-                  {replyingTo.text}
+                  {replyingTo.text || (replyingTo.imageUrl ? '📷 Photo' : '')}
                 </p>
               </div>
             </div>
@@ -426,6 +513,30 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         className="px-4 py-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors"
       >
         <div className="max-w-4xl mx-auto flex items-center gap-2 w-full">
+          {/* Hidden file input for photo upload */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoSelect}
+          />
+
+          {/* Photo attach button */}
+          <button
+            type="button"
+            disabled={isCompressing || isSending}
+            onClick={() => fileInputRef.current?.click()}
+            className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+            title="Send photo"
+          >
+            {isCompressing ? (
+              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+            ) : (
+              <ImageIcon className="w-5 h-5" />
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
@@ -439,7 +550,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             <input
               ref={inputRef}
               type="text"
-              placeholder="Type a message (Press Enter to send)..."
+              placeholder={
+                selectedPhoto
+                  ? 'Add a caption... (optional, press Enter to send)'
+                  : 'Type a message (Press Enter to send)...'
+              }
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => {
@@ -454,11 +569,15 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
           <button
             type="submit"
-            disabled={!inputText.trim() || isSending}
+            disabled={(!inputText.trim() && !selectedPhoto) || isSending || isCompressing}
             className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0"
             title="Send message (Enter)"
           >
-            <Send className="w-4 h-4" />
+            {isSending ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Send className="w-4 h-4" />
+            )}
           </button>
         </div>
       </form>
@@ -474,6 +593,61 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           onEndCall={handleEndCall}
         />
       )}
+
+      {/* Fullscreen Photo Lightbox Modal */}
+      <AnimatePresence>
+        {viewingPhotoUrl && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setViewingPhotoUrl(null)}
+            className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col items-center justify-between p-4 cursor-zoom-out select-none"
+          >
+            {/* Top Bar */}
+            <div
+              className="w-full max-w-4xl flex items-center justify-between pb-2 z-10"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="text-xs text-zinc-400 font-medium">LinkUp Photo Viewer</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={viewingPhotoUrl}
+                  download={`linkup_photo_${Date.now()}.jpg`}
+                  className="p-2 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs px-3 shadow-md"
+                  title="Save photo"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Save</span>
+                </a>
+                <button
+                  onClick={() => setViewingPhotoUrl(null)}
+                  className="p-2 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white transition-colors cursor-pointer shadow-md"
+                  title="Close viewer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Image Container */}
+            <div
+              className="relative flex-1 w-full max-w-4xl flex items-center justify-center overflow-hidden my-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={viewingPhotoUrl}
+                alt="Full resolution view"
+                className="max-w-full max-h-[82vh] object-contain rounded-xl shadow-2xl"
+              />
+            </div>
+
+            <div className="text-[11px] text-zinc-500 pt-2">
+              Tap anywhere outside or press Close to dismiss
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
