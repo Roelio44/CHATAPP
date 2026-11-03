@@ -98,46 +98,104 @@ export async function getSuggestedUsers(currentUserId: string): Promise<UserProf
 
 export type FriendshipStatus = 'none' | 'friends' | 'pending_sent' | 'pending_received';
 
-export async function checkFriendshipStatus(
+/**
+ * Bulk fetch friendship statuses for a list of target users
+ * Efficiently uses at most 3 queries in total instead of 3 queries per user!
+ */
+export async function getFriendshipStatusesForUsers(
   currentUserId: string,
-  targetUserId: string
-): Promise<{ status: FriendshipStatus; requestId?: string }> {
-  try {
-    // Check if friends
-    const friendDocId = `${currentUserId}_${targetUserId}`;
-    const friendSnap = await getDoc(doc(db, 'friends', friendDocId));
-    if (friendSnap.exists()) {
-      return { status: 'friends' };
-    }
+  targetUserIds: string[]
+): Promise<Map<string, { status: FriendshipStatus; requestId?: string }>> {
+  const statusMap = new Map<string, { status: FriendshipStatus; requestId?: string }>();
+  if (!currentUserId || targetUserIds.length === 0) {
+    return statusMap;
+  }
 
-    // Check sent request
+  // Check demo mode
+  if (currentUserId.startsWith('demo_')) {
+    targetUserIds.forEach((id) => {
+      statusMap.set(id, {
+        status: id === 'demo_contact_1' ? 'friends' : 'none',
+      });
+    });
+    return statusMap;
+  }
+
+  try {
+    // 1. Fetch current user's friends
+    const friendsRef = collection(db, 'friends');
+    const friendsQ = query(friendsRef, where('uid', '==', currentUserId));
+    const friendsSnap = await getDocs(friendsQ);
+    const friendUidSet = new Set<string>();
+    friendsSnap.forEach((d) => {
+      const data = d.data();
+      if (data.friendUid) friendUidSet.add(data.friendUid);
+    });
+
+    // 2. Fetch sent pending requests
     const reqRef = collection(db, 'friendRequests');
     const sentQ = query(
       reqRef,
       where('senderId', '==', currentUserId),
-      where('receiverId', '==', targetUserId),
       where('status', '==', 'pending')
     );
     const sentSnap = await getDocs(sentQ);
-    if (!sentSnap.empty) {
-      return { status: 'pending_sent', requestId: sentSnap.docs[0].id };
-    }
+    const sentMap = new Map<string, string>(); // receiverId -> requestId
+    sentSnap.forEach((d) => {
+      const data = d.data();
+      if (data.receiverId) sentMap.set(data.receiverId, d.id);
+    });
 
-    // Check received request
+    // 3. Fetch received pending requests
     const recvQ = query(
       reqRef,
-      where('senderId', '==', targetUserId),
       where('receiverId', '==', currentUserId),
       where('status', '==', 'pending')
     );
     const recvSnap = await getDocs(recvQ);
-    if (!recvSnap.empty) {
-      return { status: 'pending_received', requestId: recvSnap.docs[0].id };
-    }
+    const recvMap = new Map<string, string>(); // senderId -> requestId
+    recvSnap.forEach((d) => {
+      const data = d.data();
+      if (data.senderId) recvMap.set(data.senderId, d.id);
+    });
 
-    return { status: 'none' };
+    // Map each target user
+    targetUserIds.forEach((tid) => {
+      if (friendUidSet.has(tid)) {
+        statusMap.set(tid, { status: 'friends' });
+      } else if (sentMap.has(tid)) {
+        statusMap.set(tid, { status: 'pending_sent', requestId: sentMap.get(tid) });
+      } else if (recvMap.has(tid)) {
+        statusMap.set(tid, { status: 'pending_received', requestId: recvMap.get(tid) });
+      } else {
+        statusMap.set(tid, { status: 'none' });
+      }
+    });
   } catch (err) {
-    console.error('Error checking friendship status:', err);
+    console.warn('Notice in getFriendshipStatusesForUsers:', err);
+    targetUserIds.forEach((tid) => {
+      if (!statusMap.has(tid)) {
+        statusMap.set(tid, { status: 'none' });
+      }
+    });
+  }
+
+  return statusMap;
+}
+
+export async function checkFriendshipStatus(
+  currentUserId: string,
+  targetUserId: string
+): Promise<{ status: FriendshipStatus; requestId?: string }> {
+  if (!currentUserId || !targetUserId || currentUserId === targetUserId) {
+    return { status: 'none' };
+  }
+
+  try {
+    const statuses = await getFriendshipStatusesForUsers(currentUserId, [targetUserId]);
+    return statuses.get(targetUserId) || { status: 'none' };
+  } catch (err) {
+    console.warn('Notice in checkFriendshipStatus:', err);
     return { status: 'none' };
   }
 }

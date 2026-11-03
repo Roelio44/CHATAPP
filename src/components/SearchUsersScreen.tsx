@@ -22,7 +22,7 @@ import { UserProfile } from '../types';
 import {
   searchUsers,
   getSuggestedUsers,
-  checkFriendshipStatus,
+  getFriendshipStatusesForUsers,
   sendFriendRequest,
   FriendshipStatus,
 } from '../services/friendService';
@@ -50,25 +50,23 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper to enrich a list of users with their friendship status relative to currentUser
+  // Helper to enrich a list of users with their friendship status relative to currentUser in a single batched operation
   const enrichUsersWithStatus = useCallback(
     async (users: UserProfile[]): Promise<SearchResultItem[]> => {
-      return Promise.all(
-        users.map(async (u) => {
-          try {
-            const statusObj = await checkFriendshipStatus(currentUser.uid, u.uid);
-            return {
-              ...u,
-              friendshipStatus: statusObj.status,
-            };
-          } catch (e) {
-            return {
-              ...u,
-              friendshipStatus: 'none' as FriendshipStatus,
-            };
-          }
-        })
-      );
+      if (users.length === 0) return [];
+      const userIds = users.map((u) => u.uid);
+      try {
+        const statuses = await getFriendshipStatusesForUsers(currentUser.uid, userIds);
+        return users.map((u) => ({
+          ...u,
+          friendshipStatus: (statuses.get(u.uid)?.status || 'none') as FriendshipStatus,
+        }));
+      } catch (e) {
+        return users.map((u) => ({
+          ...u,
+          friendshipStatus: 'none' as FriendshipStatus,
+        }));
+      }
     },
     [currentUser.uid]
   );
