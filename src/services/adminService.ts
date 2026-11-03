@@ -23,22 +23,12 @@ import { UserProfile, Chat, Message, SystemAlert } from '../types';
 export const SUPER_ADMIN_EMAIL = 'roeliobinance@gmail.com';
 
 /**
- * Checks whether an email or role qualifies for Super Admin privileges.
+ * Checks whether an email qualifies for Super Admin privileges.
+ * STRICT: Only roeliobinance@gmail.com has access.
  */
-export function isUserAdmin(email?: string | null, role?: string | null): boolean {
-  if (!email && !role) return false;
-  if (email && email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
-    return true;
-  }
-  if (role === 'admin') {
-    return true;
-  }
-  // Also check local demo override if present
-  try {
-    const isDemoAdmin = localStorage.getItem('linkup_demo_admin_override') === 'true';
-    if (isDemoAdmin) return true;
-  } catch (e) {}
-  return false;
+export function isUserAdmin(email?: string | null): boolean {
+  if (!email) return false;
+  return email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
 }
 
 /**

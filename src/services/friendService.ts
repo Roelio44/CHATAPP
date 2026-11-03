@@ -20,48 +20,80 @@ import {
 } from '../firebase/config';
 import { UserProfile, FriendRequest, Friend } from '../types';
 
-export async function searchUsers(searchTerm: string, currentUserId: string): Promise<UserProfile[]> {
-  const cleanTerm = searchTerm.trim().replace(/^@/, '').toLowerCase();
-  if (!cleanTerm) return [];
+/**
+ * Fetch all registered users in Firestore + available demo/community profiles
+ */
+export async function getAllDiscoverableUsers(currentUserId: string): Promise<UserProfile[]> {
+  const results: UserProfile[] = [];
+  const seenIds = new Set<string>();
 
   try {
-    // Search users by userId prefix or fetch recent users
     const usersRef = collection(db, 'users');
-    const q = query(
-      usersRef,
-      where('userId', '>=', cleanTerm),
-      where('userId', '<=', cleanTerm + '\uf8ff')
-    );
-    const snap = await getDocs(q);
-    const results: UserProfile[] = [];
+    const snap = await getDocs(usersRef);
 
     snap.forEach((docSnap) => {
       if (docSnap.id !== currentUserId) {
-        results.push(docSnap.data() as UserProfile);
+        const u = { uid: docSnap.id, ...docSnap.data() } as UserProfile;
+        results.push(u);
+        seenIds.add(docSnap.id);
+        if (u.userId) seenIds.add(u.userId.toLowerCase());
       }
     });
-
-    // If prefix matched few or none, fallback to broad search if cleanTerm is small
-    if (results.length === 0) {
-      const allUsersSnap = await getDocs(usersRef);
-      allUsersSnap.forEach((docSnap) => {
-        if (docSnap.id !== currentUserId) {
-          const user = docSnap.data() as UserProfile;
-          if (
-            user.userId.toLowerCase().includes(cleanTerm) ||
-            user.fullName.toLowerCase().includes(cleanTerm)
-          ) {
-            results.push(user);
-          }
-        }
-      });
-    }
-
-    return results;
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, 'users');
-    return [];
+    console.warn('Notice fetching users from Firestore in getAllDiscoverableUsers:', err);
   }
+
+  // Always supplement with community demo users so users always have people to test & connect with
+  try {
+    const { DEMO_USERS } = await import('./demoService');
+    for (const demoU of DEMO_USERS) {
+      if (
+        demoU.uid !== currentUserId &&
+        !seenIds.has(demoU.uid) &&
+        !seenIds.has(demoU.userId.toLowerCase())
+      ) {
+        results.push(demoU);
+        seenIds.add(demoU.uid);
+      }
+    }
+  } catch (e) {
+    console.warn('Notice importing DEMO_USERS:', e);
+  }
+
+  return results;
+}
+
+/**
+ * Search users by handle (@userId), full name, or email (case-insensitive substring match)
+ */
+export async function searchUsers(searchTerm: string, currentUserId: string): Promise<UserProfile[]> {
+  const cleanTerm = searchTerm.trim().replace(/^@/, '').toLowerCase();
+  const allUsers = await getAllDiscoverableUsers(currentUserId);
+
+  if (!cleanTerm) {
+    return allUsers.slice(0, 15);
+  }
+
+  return allUsers.filter((u) => {
+    const uId = (u.userId || '').toLowerCase();
+    const fName = (u.fullName || '').toLowerCase();
+    const mail = (u.email || '').toLowerCase();
+    const bioText = (u.bio || '').toLowerCase();
+    return (
+      uId.includes(cleanTerm) ||
+      fName.includes(cleanTerm) ||
+      mail.includes(cleanTerm) ||
+      bioText.includes(cleanTerm)
+    );
+  });
+}
+
+/**
+ * Get suggested users to display on the search screen when first opened
+ */
+export async function getSuggestedUsers(currentUserId: string): Promise<UserProfile[]> {
+  const allUsers = await getAllDiscoverableUsers(currentUserId);
+  return allUsers.slice(0, 12);
 }
 
 export type FriendshipStatus = 'none' | 'friends' | 'pending_sent' | 'pending_received';

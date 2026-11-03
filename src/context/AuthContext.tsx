@@ -24,6 +24,7 @@ import {
   query,
   where,
   getDocs,
+  updateProfile,
   handleFirestoreError,
   OperationType,
 } from '../firebase/config';
@@ -86,12 +87,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             (snap) => {
               if (snap.exists()) {
                 const data = snap.data() as UserProfile;
-                // If it is roeliobinance@gmail.com, ensure they are marked as admin and verified
-                if (user.email && user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+                const isOwner = Boolean(user.email && user.email.trim().toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase());
+                if (isOwner) {
                   if (data.role !== 'admin' || !data.isVerified) {
                     data.role = 'admin';
                     data.isVerified = true;
                     updateDoc(userDocRef, { role: 'admin', isVerified: true }).catch(() => {});
+                  }
+                } else {
+                  if (data.role === 'admin') {
+                    data.role = 'user';
+                    updateDoc(userDocRef, { role: 'user' }).catch(() => {});
                   }
                 }
                 setUserProfile(data);
@@ -193,84 +199,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [currentUser?.uid, needsProfileSetup]);
 
-  const activateUniversalSession = (email: string, customName?: string) => {
-    const cleanEmail = email.trim().toLowerCase();
-    const isSuperAdmin = cleanEmail === SUPER_ADMIN_EMAIL.toLowerCase();
-    const handleBase = cleanEmail.split('@')[0].replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'user';
-    const name = customName || (isSuperAdmin ? 'Roelio (Admin)' : cleanEmail.split('@')[0]);
-    const uid = isSuperAdmin ? 'admin_roelio_root' : `user_${handleBase}_${Date.now().toString(36)}`;
-
-    const sessionUser = {
-      uid,
-      email: cleanEmail,
-      displayName: name,
-      photoURL: `https://api.dicebear.com/7.x/bottts/svg?seed=${handleBase}`,
-      emailVerified: true,
-    } as any;
-
-    const sessionProfile: UserProfile = {
-      uid,
-      fullName: name,
-      email: cleanEmail,
-      userId: handleBase,
-      profileImage: `https://api.dicebear.com/7.x/bottts/svg?seed=${handleBase}`,
-      bio: isSuperAdmin ? 'Super Administrator of LinkUp Messenger' : 'Active on LinkUp Messenger',
-      isOnline: true,
-      lastSeen: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      isVerified: isSuperAdmin,
-      role: isSuperAdmin ? 'admin' : 'user',
-    };
-
-    try {
-      localStorage.setItem(
-        'linkup_demo_session',
-        JSON.stringify({ user: sessionUser, profile: sessionProfile })
-      );
-    } catch (e) {}
-
-    setCurrentUser(sessionUser);
-    setUserProfile(sessionProfile);
-    setNeedsProfileSetup(false);
-    setLoading(false);
-  };
-
-  const loginDirectAnyIp = async (email = SUPER_ADMIN_EMAIL, name?: string) => {
-    setAuthError(null);
-    activateUniversalSession(email, name);
-  };
-
   const loginWithGoogle = async () => {
     setAuthError(null);
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err: any) {
       const code = err?.code || '';
-      if (code === 'auth/unauthorized-domain') {
-        // If connecting via raw IP (e.g. 192.168.0.227), Google blocks popup domain check.
-        // Auto-authenticate as Admin on this IP without blocking!
-        console.warn('IP domain restricted by Google OAuth, switching to instant direct session.');
-        activateUniversalSession(SUPER_ADMIN_EMAIL, 'Roelio (Admin)');
+      console.warn('Google sign-in status:', code, err?.message);
+
+      if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        // User closed or cancelled the popup dialog themselves
         return;
       }
 
-      let msg = 'Google Sign-In could not be completed.';
       if (code === 'auth/popup-blocked') {
-        msg = 'Sign-in popup was blocked by browser. Using direct access instead...';
-        activateUniversalSession(SUPER_ADMIN_EMAIL);
+        setAuthError(
+          'Your browser blocked the Google sign-in popup. Please allow popups for this page, or sign in using email and password below.'
+        );
         return;
-      } else if (code === 'auth/popup-closed-by-user') {
-        msg = 'Google popup was closed.';
-      } else if (err?.message) {
-        msg = err.message;
       }
-      setAuthError(msg);
-    }
-  };
 
-  const loginDemoAccount = async (demoEmail = 'demo@linkup.app') => {
-    setAuthError(null);
-    activateUniversalSession(demoEmail, 'Demo User');
+      if (code === 'auth/unauthorized-domain') {
+        setAuthError(
+          'This address is not yet in Firebase Authorized Domains. Please sign in with Email & Password below, or open LinkUp via the authorized domain (albaniachachat.netlify.app).'
+        );
+        return;
+      }
+
+      setAuthError(err?.message || 'Google sign-in could not be completed.');
+    }
   };
 
   const loginWithEmail = async (email: string, pass: string) => {
@@ -279,9 +236,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await signInWithEmailAndPassword(auth, clean, pass);
     } catch (err: any) {
-      console.warn('Email sign in notice:', err?.code);
-      // Auto-fallback: Works on EVERY IP (192.168.x.x, 10.x.x.x, etc.)
-      activateUniversalSession(clean);
+      const code = err?.code || '';
+      console.warn('Email sign in error:', code);
+      if (code === 'auth/user-not-found' || code === 'auth/invalid-credential') {
+        setAuthError('Incorrect email or password. If you do not have an account yet, click "Create one" below.');
+      } else if (code === 'auth/wrong-password') {
+        setAuthError('Incorrect password. Please verify and try again.');
+      } else if (code === 'auth/invalid-email') {
+        setAuthError('Please enter a valid email address.');
+      } else if (code === 'auth/too-many-requests') {
+        setAuthError('Too many failed attempts. Please wait a few moments before trying again.');
+      } else {
+        setAuthError(err?.message || 'Failed to sign in with email.');
+      }
+      throw err;
     }
   };
 
@@ -289,12 +257,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setAuthError(null);
     const clean = email.trim().toLowerCase();
     try {
-      await createUserWithEmailAndPassword(auth, clean, pass);
+      const cred = await createUserWithEmailAndPassword(auth, clean, pass);
+      if (fullName.trim() && cred.user) {
+        await updateProfile(cred.user, { displayName: fullName.trim() }).catch(() => {});
+      }
       setNeedsProfileSetup(true);
     } catch (err: any) {
-      console.warn('Email sign up notice:', err?.code);
-      // Auto-fallback: Works on EVERY IP!
-      activateUniversalSession(clean, fullName.trim());
+      const code = err?.code || '';
+      console.warn('Email sign up error:', code);
+      if (code === 'auth/email-already-in-use') {
+        setAuthError('An account with this email already exists. Please sign in instead.');
+      } else if (code === 'auth/weak-password') {
+        setAuthError('Password is too weak. Please use at least 6 characters.');
+      } else if (code === 'auth/invalid-email') {
+        setAuthError('Please enter a valid email address.');
+      } else {
+        setAuthError(err?.message || 'Failed to create account.');
+      }
+      throw err;
     }
   };
 
