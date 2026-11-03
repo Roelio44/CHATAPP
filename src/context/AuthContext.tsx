@@ -220,8 +220,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (code === 'auth/unauthorized-domain') {
+        const host = typeof window !== 'undefined' ? window.location.hostname : 'albaniachat.netlify.app';
         setAuthError(
-          'This address is not yet in Firebase Authorized Domains. Please sign in with Email & Password below, or open LinkUp via the authorized domain (albaniachachat.netlify.app).'
+          `Domain "${host}" is not in Firebase Authorized Domains yet.\n\nTo enable Google login on Netlify, add "${host}" in Firebase Console > Authentication > Settings > Authorized Domains.\n\nYou can also sign in or create an account instantly with Email & Password below!`
         );
         return;
       }
