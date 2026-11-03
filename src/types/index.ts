@@ -83,6 +83,22 @@ export interface SystemAlert {
   createdBy: string;
 }
 
+export type CallType = 'audio' | 'video';
+
+export interface CallSession {
+  callId: string;
+  chatId: string;
+  callerId: string;
+  callerName: string;
+  callerImage: string;
+  callerUserId?: string;
+  receiverId: string;
+  type: CallType;
+  status: 'calling' | 'accepted' | 'declined' | 'ended';
+  createdAt: any;
+  endedAt?: any;
+}
+
 export type ThemePreference = 'system' | 'light' | 'dark';
 
 export type MainTab = 'chats' | 'friends' | 'search' | 'profile' | 'admin';

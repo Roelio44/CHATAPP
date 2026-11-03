@@ -133,5 +133,25 @@ service cloud.firestore {
           && (isAdmin() || existing().senderId == request.auth.uid);
       }
     }
+
+    // Calls Collection for Live Call Signaling (Ring, Accept, Decline, End)
+    match /calls/{callId} {
+      allow get: if isSignedIn() && isValidId(callId);
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(callId)
+        && incoming().callerId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(callId)
+        && (
+          isAdmin() ||
+          existing().callerId == request.auth.uid ||
+          existing().receiverId == request.auth.uid
+        );
+      allow delete: if isSignedIn() && isValidId(callId)
+        && (
+          isAdmin() ||
+          existing().callerId == request.auth.uid ||
+          existing().receiverId == request.auth.uid
+        );
+    }
   }
 }

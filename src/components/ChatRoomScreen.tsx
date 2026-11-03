@@ -466,9 +466,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       {/* Active Audio / Video Call Overlay */}
       {activeCall && (
         <CallModal
+          chatId={chatId}
           callType={activeCall}
           currentUser={currentUser}
           otherUser={otherUser}
+          isInitiator={true}
           onEndCall={handleEndCall}
         />
       )}

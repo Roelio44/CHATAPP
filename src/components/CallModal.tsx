@@ -19,25 +19,39 @@ import {
   Minimize2,
   Sparkles,
 } from 'lucide-react';
-import { UserProfile } from '../types';
+import { CallType, UserProfile } from '../types';
 import { VerifiedBadge } from './VerifiedBadge';
 
-export type CallType = 'audio' | 'video';
+export type { CallType };
+import {
+  initiateCall,
+  listenToCallSession,
+  endCallSession,
+} from '../services/callService';
 
 interface CallModalProps {
+  chatId: string;
   callType: CallType;
   currentUser: UserProfile;
   otherUser: UserProfile;
+  isInitiator?: boolean;
+  initialCallId?: string;
   onEndCall: (durationSeconds: number, callType: CallType, wasConnected: boolean) => void;
 }
 
 export const CallModal: React.FC<CallModalProps> = ({
+  chatId,
   callType,
   currentUser,
   otherUser,
+  isInitiator = true,
+  initialCallId,
   onEndCall,
 }) => {
-  const [callStatus, setCallStatus] = useState<'calling' | 'ringing' | 'connected'>('calling');
+  const [callId, setCallId] = useState<string>(initialCallId || `call_${chatId}`);
+  const [callStatus, setCallStatus] = useState<'calling' | 'ringing' | 'connected' | 'declined'>(
+    isInitiator ? 'calling' : 'connected'
+  );
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(callType === 'video');
@@ -49,8 +63,9 @@ export const CallModal: React.FC<CallModalProps> = ({
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const ringOscillatorRef = useRef<OscillatorNode | null>(null);
+  const timerRef = useRef<any>(null);
 
-  // Play ringing sound using Web Audio API synthesis
+  // Play outgoing ringing sound
   const startRingingSound = () => {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -69,9 +84,7 @@ export const CallModal: React.FC<CallModalProps> = ({
 
       osc.start();
       ringOscillatorRef.current = osc;
-    } catch (e) {
-      // Audio autoplay may be constrained by browser
-    }
+    } catch (e) {}
   };
 
   const stopRingingSound = () => {
@@ -88,27 +101,56 @@ export const CallModal: React.FC<CallModalProps> = ({
     } catch (e) {}
   };
 
-  // Lifecycle: Calling -> Ringing -> Connected
+  // Real-time Firestore signaling session listener
   useEffect(() => {
-    startRingingSound();
+    let unsubscribe: (() => void) | null = null;
 
-    const ringingTimer = setTimeout(() => {
-      setCallStatus('ringing');
-    }, 1400);
+    const setupSession = async () => {
+      let activeId = callId;
+      if (isInitiator) {
+        startRingingSound();
+        try {
+          activeId = await initiateCall(chatId, currentUser, otherUser, callType);
+          setCallId(activeId);
+        } catch (err) {
+          console.warn('Notice initiating call session:', err);
+        }
+      }
 
-    const connectedTimer = setTimeout(() => {
-      stopRingingSound();
-      setCallStatus('connected');
-    }, 3200);
+      unsubscribe = listenToCallSession(activeId, (session) => {
+        if (!session) {
+          // Call doc was removed or ended
+          if (callStatus === 'connected') {
+            handleEnd(true);
+          }
+          return;
+        }
+
+        if (session.status === 'accepted') {
+          stopRingingSound();
+          setCallStatus('connected');
+        } else if (session.status === 'declined') {
+          stopRingingSound();
+          setCallStatus('declined');
+          setTimeout(() => {
+            handleEnd(false);
+          }, 1800);
+        } else if (session.status === 'ended') {
+          stopRingingSound();
+          handleEnd(callStatus === 'connected');
+        }
+      });
+    };
+
+    setupSession();
 
     return () => {
-      clearTimeout(ringingTimer);
-      clearTimeout(connectedTimer);
       stopRingingSound();
+      if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [chatId, isInitiator]);
 
-  // Call duration counter once connected
+  // Duration counter once connected
   useEffect(() => {
     if (callStatus !== 'connected') return;
     const interval = setInterval(() => {
@@ -117,7 +159,7 @@ export const CallModal: React.FC<CallModalProps> = ({
     return () => clearInterval(interval);
   }, [callStatus]);
 
-  // Request actual camera/mic stream if supported
+  // Camera & Microphone stream
   useEffect(() => {
     let active = true;
 
@@ -144,7 +186,7 @@ export const CallModal: React.FC<CallModalProps> = ({
           localVideoRef.current.srcObject = stream;
         }
       } catch (err) {
-        console.warn('Camera/mic access error or denied:', err);
+        console.warn('Camera/mic stream error or permission declined:', err);
       }
     };
 
@@ -158,7 +200,6 @@ export const CallModal: React.FC<CallModalProps> = ({
     };
   }, [callType, facingMode]);
 
-  // Toggle Video Track
   const handleToggleVideo = () => {
     if (streamRef.current) {
       const videoTracks = streamRef.current.getVideoTracks();
@@ -167,7 +208,6 @@ export const CallModal: React.FC<CallModalProps> = ({
     setIsVideoEnabled(!isVideoEnabled);
   };
 
-  // Toggle Audio Track
   const handleToggleMute = () => {
     if (streamRef.current) {
       const audioTracks = streamRef.current.getAudioTracks();
@@ -176,7 +216,6 @@ export const CallModal: React.FC<CallModalProps> = ({
     setIsMuted(!isMuted);
   };
 
-  // Flip Camera
   const handleFlipCamera = () => {
     setFacingMode((prev) => (prev === 'user' ? 'environment' : 'user'));
   };
@@ -187,24 +226,25 @@ export const CallModal: React.FC<CallModalProps> = ({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const handleEnd = () => {
+  const handleEnd = async (wasConnected = callStatus === 'connected') => {
     stopRingingSound();
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track) => track.stop());
     }
-    onEndCall(duration, callType, callStatus === 'connected');
+    await endCallSession(callId);
+    onEndCall(duration, callType, wasConnected);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl select-none animate-in fade-in duration-300">
-      {/* Background Ambient Glow */}
+      {/* Ambient background glow */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -left-40 w-96 h-96 rounded-full bg-blue-600/20 blur-3xl" />
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl" />
       </div>
 
       <div className="relative w-full max-w-lg h-full max-h-[92vh] sm:h-[85vh] sm:rounded-3xl flex flex-col justify-between p-6 sm:p-8 bg-zinc-950/80 border border-zinc-800/60 shadow-2xl overflow-hidden">
-        {/* Top Call Type Indicator & Security Badge */}
+        {/* Top Header */}
         <div className="flex items-center justify-between z-20">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-white text-xs backdrop-blur-md">
             {callType === 'video' ? <Video className="w-3.5 h-3.5 text-blue-400" /> : <Phone className="w-3.5 h-3.5 text-emerald-400" />}
@@ -228,7 +268,6 @@ export const CallModal: React.FC<CallModalProps> = ({
         <div className="relative flex-1 flex flex-col items-center justify-center my-auto z-10 w-full">
           {callType === 'video' ? (
             <div className="relative w-full h-80 sm:h-96 rounded-3xl overflow-hidden bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-inner">
-              {/* Remote simulation view */}
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-zinc-900 to-zinc-950">
                 <img
                   src={
@@ -240,11 +279,15 @@ export const CallModal: React.FC<CallModalProps> = ({
                 />
                 <h3 className="text-lg font-semibold text-white">{otherUser.fullName}</h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  {callStatus === 'connected' ? 'High Definition Video' : 'Connecting video stream...'}
+                  {callStatus === 'connected'
+                    ? 'High Definition Live Video'
+                    : callStatus === 'declined'
+                    ? 'Call was declined'
+                    : 'Waiting for answer...'}
                 </p>
               </div>
 
-              {/* Local PiP Video Feed */}
+              {/* PiP Local Video */}
               {isVideoEnabled && (
                 <div className="absolute bottom-4 right-4 w-28 h-36 rounded-2xl overflow-hidden border-2 border-white/30 shadow-2xl bg-black">
                   <video
@@ -259,9 +302,8 @@ export const CallModal: React.FC<CallModalProps> = ({
             </div>
           ) : (
             <div className="flex flex-col items-center text-center">
-              {/* Pulsing Avatar Container */}
               <div className="relative mb-6">
-                {callStatus !== 'connected' && (
+                {callStatus !== 'connected' && callStatus !== 'declined' && (
                   <motion.div
                     animate={{ scale: [1, 1.25, 1], opacity: [0.6, 0.15, 0.6] }}
                     transition={{ repeat: Infinity, duration: 2.2, ease: 'easeInOut' }}
@@ -296,6 +338,8 @@ export const CallModal: React.FC<CallModalProps> = ({
                   <span className="text-zinc-400 animate-pulse">Calling...</span>
                 ) : callStatus === 'ringing' ? (
                   <span className="text-amber-400 animate-pulse">Ringing...</span>
+                ) : callStatus === 'declined' ? (
+                  <span className="text-rose-400 font-semibold">Call Declined</span>
                 ) : (
                   <span className="text-emerald-400 font-mono tracking-wider font-semibold">
                     {formatDuration(duration)}
@@ -322,7 +366,7 @@ export const CallModal: React.FC<CallModalProps> = ({
               {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
             </button>
 
-            {/* Video Toggle (If video call) */}
+            {/* Video Toggle */}
             {callType === 'video' && (
               <button
                 onClick={handleToggleVideo}
@@ -352,7 +396,7 @@ export const CallModal: React.FC<CallModalProps> = ({
 
             {/* End Call Button */}
             <button
-              onClick={handleEnd}
+              onClick={() => handleEnd()}
               className="p-4 rounded-2xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 text-white shadow-xl shadow-rose-600/30 transition-all cursor-pointer active:scale-95"
               title="End call"
             >
@@ -361,7 +405,7 @@ export const CallModal: React.FC<CallModalProps> = ({
           </div>
 
           <p className="text-[11px] text-zinc-500">
-            LinkUp High-Definition Voice & Video Powered by WebRTC
+            LinkUp Real-Time Audio & Video Call Signaling
           </p>
         </div>
       </div>

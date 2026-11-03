@@ -21,6 +21,10 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { ThemePreference, UserProfile } from '../types';
+import {
+  requestNotificationPermission,
+  sendWebNotification,
+} from '../utils/notificationService';
 
 interface SettingsScreenProps {
   currentProfile: UserProfile;
@@ -216,6 +220,45 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 <div
                   className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform shadow-xs ${
                     readReceipts ? 'left-5.5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-3.5">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-blue-500/10 text-blue-600">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                    Push Notifications
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Alerts for incoming calls and new messages
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  const next = !notifications;
+                  setNotifications(next);
+                  if (next) {
+                    const granted = await requestNotificationPermission();
+                    if (granted) {
+                      sendWebNotification('LinkUp Messenger', {
+                        body: 'Push notifications are active for incoming calls and messages!',
+                      });
+                    }
+                  }
+                }}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer ${
+                  notifications ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-700'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform shadow-xs ${
+                    notifications ? 'left-5.5' : 'left-0.5'
                   }`}
                 />
               </button>

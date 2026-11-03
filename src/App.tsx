@@ -20,7 +20,9 @@ import { ProfileScreen } from './components/ProfileScreen';
 import { SettingsScreen } from './components/SettingsScreen';
 import { AdminPanelScreen } from './components/AdminPanelScreen';
 import { BannedScreen } from './components/BannedScreen';
-import { MainTab, UserProfile } from './types';
+import { IncomingCallModal } from './components/IncomingCallModal';
+import { CallModal } from './components/CallModal';
+import { MainTab, UserProfile, CallSession, CallType } from './types';
 import {
   db,
   collection,
@@ -30,6 +32,16 @@ import {
   testFirestoreConnection,
 } from './firebase/config';
 import { getOrCreateChat } from './services/chatService';
+import {
+  listenForIncomingCalls,
+  acceptCall,
+  declineCall,
+  endCallSession,
+} from './services/callService';
+import {
+  requestNotificationPermission,
+  sendWebNotification,
+} from './utils/notificationService';
 
 function MainApp() {
   const { currentUser, userProfile, loading, needsProfileSetup, isAdmin } = useAuth();
@@ -40,6 +52,13 @@ function MainApp() {
     otherUser: UserProfile;
   } | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
+  // Incoming & Active received call state
+  const [incomingCall, setIncomingCall] = useState<CallSession | null>(null);
+  const [activeReceivedCall, setActiveReceivedCall] = useState<{
+    session: CallSession;
+    otherUser: UserProfile;
+  } | null>(null);
 
   // Unread counts & pending requests badges
   const [unreadChatsCount, setUnreadChatsCount] = useState<number>(0);
@@ -127,6 +146,62 @@ function MainApp() {
 
     return () => unsub();
   }, [userProfile?.uid]);
+
+  // Request push notification permission when user profile is active
+  useEffect(() => {
+    if (userProfile?.uid) {
+      requestNotificationPermission();
+    }
+  }, [userProfile?.uid]);
+
+  // Real-time listener for incoming voice or video calls targeted at current user
+  useEffect(() => {
+    if (!userProfile?.uid) return;
+
+    const unsub = listenForIncomingCalls(userProfile.uid, (session) => {
+      setIncomingCall(session);
+
+      if (session && session.status === 'calling') {
+        sendWebNotification(`Incoming ${session.type} call`, {
+          body: `${session.callerName} is calling you on LinkUp Messenger...`,
+          tag: session.callId,
+          requireInteraction: true,
+        });
+      }
+    });
+
+    return () => unsub();
+  }, [userProfile?.uid]);
+
+  const handleAcceptIncomingCall = async () => {
+    if (!incomingCall) return;
+    await acceptCall(incomingCall.callId);
+    const callerAsOther: UserProfile = {
+      uid: incomingCall.callerId,
+      fullName: incomingCall.callerName,
+      email: '',
+      userId: incomingCall.callerUserId || incomingCall.callerId.slice(0, 8),
+      profileImage: incomingCall.callerImage,
+      isOnline: true,
+      lastSeen: new Date(),
+      createdAt: new Date(),
+    };
+    setActiveReceivedCall({ session: incomingCall, otherUser: callerAsOther });
+    setIncomingCall(null);
+  };
+
+  const handleDeclineIncomingCall = async () => {
+    if (!incomingCall) return;
+    await declineCall(incomingCall.callId);
+    setIncomingCall(null);
+  };
+
+  const handleEndReceivedCall = async () => {
+    if (activeReceivedCall) {
+      await endCallSession(activeReceivedCall.session.callId);
+      setActiveReceivedCall(null);
+    }
+  };
 
   // Open chat room with user
   const handleOpenChatWithUser = async (other: UserProfile) => {
@@ -278,22 +353,46 @@ function MainApp() {
   );
 
   return (
-    <WebAppLayout
-      activeTab={activeTab}
-      onTabChange={(tab) => {
-        setActiveTab(tab);
-        setIsSettingsOpen(false);
-      }}
-      isSettingsOpen={isSettingsOpen}
-      onOpenSettings={() => setIsSettingsOpen(true)}
-      onCloseSettings={() => setIsSettingsOpen(false)}
-      userProfile={userProfile}
-      unreadChatsCount={unreadChatsCount}
-      pendingRequestsCount={pendingRequestsCount}
-      activeChat={activeChat}
-      sidebarContent={sidebarContent}
-      mainContent={mainContent}
-    />
+    <>
+      <WebAppLayout
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+          setIsSettingsOpen(false);
+        }}
+        isSettingsOpen={isSettingsOpen}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onCloseSettings={() => setIsSettingsOpen(false)}
+        userProfile={userProfile}
+        unreadChatsCount={unreadChatsCount}
+        pendingRequestsCount={pendingRequestsCount}
+        activeChat={activeChat}
+        sidebarContent={sidebarContent}
+        mainContent={mainContent}
+      />
+
+      {/* Global Real-Time Incoming Call Modal (Accept / Decline) */}
+      {incomingCall && (
+        <IncomingCallModal
+          session={incomingCall}
+          onAccept={handleAcceptIncomingCall}
+          onDecline={handleDeclineIncomingCall}
+        />
+      )}
+
+      {/* Connected Received Call Modal */}
+      {activeReceivedCall && (
+        <CallModal
+          chatId={activeReceivedCall.session.chatId}
+          callType={activeReceivedCall.session.type}
+          currentUser={userProfile}
+          otherUser={activeReceivedCall.otherUser}
+          isInitiator={false}
+          initialCallId={activeReceivedCall.session.callId}
+          onEndCall={handleEndReceivedCall}
+        />
+      )}
+    </>
   );
 }
 

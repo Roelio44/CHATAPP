@@ -98,6 +98,25 @@
         "createdBy": { "type": "string", "maxLength": 128 }
       },
       "required": ["title", "message", "type", "isActive"]
+    },
+    "Call": {
+      "title": "Call",
+      "description": "Real-time call session signaling for voice and video calls with accept/decline",
+      "type": "object",
+      "properties": {
+        "callId": { "type": "string", "maxLength": 128 },
+        "chatId": { "type": "string", "maxLength": 128 },
+        "callerId": { "type": "string", "maxLength": 128 },
+        "callerName": { "type": "string", "maxLength": 80 },
+        "callerImage": { "type": "string", "maxLength": 2048 },
+        "callerUserId": { "type": "string", "maxLength": 30 },
+        "receiverId": { "type": "string", "maxLength": 128 },
+        "type": { "type": "string", "enum": ["audio", "video"] },
+        "status": { "type": "string", "enum": ["calling", "accepted", "declined", "ended"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "endedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["callId", "chatId", "callerId", "receiverId", "type", "status"]
     }
   },
   "firestore": {
@@ -124,6 +143,10 @@
     "/systemAlerts/{alertId}": {
       "schema": { "$ref": "#/entities/SystemAlert" },
       "description": "System broadcast messages created by admins"
+    },
+    "/calls/{callId}": {
+      "schema": { "$ref": "#/entities/Call" },
+      "description": "Active audio and video call signaling sessions between participants"
     }
   }
 }
