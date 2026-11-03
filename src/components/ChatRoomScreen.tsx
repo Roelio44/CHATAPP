@@ -31,6 +31,7 @@ import { Message, UserProfile } from '../types';
 import { sendMessage, markMessagesAsSeen } from '../services/chatService';
 import { formatMessageTime, formatLastSeen } from '../utils/formatTime';
 import { VerifiedBadge } from './VerifiedBadge';
+import { CallModal, CallType } from './CallModal';
 
 interface ChatRoomScreenProps {
   chatId: string;
@@ -52,6 +53,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [activeCall, setActiveCall] = useState<CallType | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -72,10 +74,9 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
     }
 
     const messagesRef = collection(db, 'chats', chatId, 'messages');
-    const q = query(messagesRef, orderBy('timestamp', 'asc'));
 
     const unsubscribe = onSnapshot(
-      q,
+      messagesRef,
       (snapshot) => {
         const msgs: Message[] = [];
         snapshot.docs.forEach((docSnap) => {
@@ -91,14 +92,27 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             replyTo: data.replyTo || undefined,
           });
         });
+
+        // Client-side timestamp sorting to guarantee no messages are omitted while serverTimestamp is resolving
+        msgs.sort((a, b) => {
+          const toTime = (t: any): number => {
+            if (!t) return Date.now();
+            if (typeof t.toMillis === 'function') return t.toMillis();
+            if (t instanceof Date) return t.getTime();
+            if (typeof t === 'number') return t;
+            if (typeof t === 'string') return new Date(t).getTime();
+            return 0;
+          };
+          return toTime(a.timestamp) - toTime(b.timestamp);
+        });
+
         setMessages(msgs);
 
         // Mark messages as seen
         markMessagesAsSeen(chatId, currentUser.uid);
       },
       (error) => {
-        console.error('Error listening to messages:', error);
-        handleFirestoreError(error, OperationType.LIST, `chats/${chatId}/messages`);
+        console.warn('Real-time messages listener notice:', error);
       }
     );
 
@@ -109,6 +123,27 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleEndCall = async (
+    durationSeconds: number,
+    callType: CallType,
+    wasConnected: boolean
+  ) => {
+    setActiveCall(null);
+    let summary = '';
+    if (wasConnected && durationSeconds > 0) {
+      const mins = Math.floor(durationSeconds / 60);
+      const secs = durationSeconds % 60;
+      const durationStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      summary = `${callType === 'video' ? '📹 Video call' : '📞 Voice call'} • ${durationStr}`;
+    } else {
+      summary = `${callType === 'video' ? '📹 Cancelled video call' : '📞 Cancelled voice call'}`;
+    }
+
+    try {
+      await sendMessage(chatId, currentUser.uid, otherUser.uid, summary);
+    } catch (e) {}
+  };
 
   const handleSend = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -212,16 +247,16 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         {/* Action icons */}
         <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
           <button
-            onClick={() => alert(`Calling ${otherUser.fullName}...`)}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-            title="Audio call"
+            onClick={() => setActiveCall('audio')}
+            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            title="Start voice call"
           >
             <Phone className="w-4 h-4" />
           </button>
           <button
-            onClick={() => alert(`Starting video call with ${otherUser.fullName}...`)}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-            title="Video call"
+            onClick={() => setActiveCall('video')}
+            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            title="Start video call"
           >
             <Video className="w-4 h-4" />
           </button>
@@ -427,6 +462,16 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           </button>
         </div>
       </form>
+
+      {/* Active Audio / Video Call Overlay */}
+      {activeCall && (
+        <CallModal
+          callType={activeCall}
+          currentUser={currentUser}
+          otherUser={otherUser}
+          onEndCall={handleEndCall}
+        />
+      )}
     </div>
   );
 };

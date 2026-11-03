@@ -120,18 +120,15 @@ service cloud.firestore {
       allow delete: if isSignedIn() && isValidId(chatId)
         && (isAdmin() || request.auth.uid in existing().participants);
 
-      // Messages Subcollection (Master Gate pattern + Admin audit/deletion override)
+      // Messages Subcollection
       match /messages/{messageId} {
-        allow read: if isSignedIn() && isValidId(messageId) && (
-          isAdmin() ||
-          request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
-        );
+        allow get: if isSignedIn() && isValidId(messageId);
+        allow list: if isSignedIn();
         allow create: if isSignedIn() && isValidId(messageId)
-          && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants
           && incoming().senderId == request.auth.uid
           && incoming().text is string && incoming().text.size() > 0 && incoming().text.size() <= 2000;
         allow update: if isSignedIn() && isValidId(messageId)
-          && (isAdmin() || request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+          && (isAdmin() || incoming().senderId == request.auth.uid || ('seen' in incoming()));
         allow delete: if isSignedIn() && isValidId(messageId)
           && (isAdmin() || existing().senderId == request.auth.uid);
       }

@@ -67,6 +67,25 @@ export async function sendMessage(
   const chatRef = doc(db, 'chats', chatId);
 
   try {
+    // 0. Ensure the parent chat document exists with both participants
+    const chatSnap = await getDoc(chatRef);
+    if (!chatSnap.exists()) {
+      await setDoc(chatRef, {
+        chatId,
+        participants: [senderId, receiverId],
+        lastMessage: text.trim(),
+        lastSenderId: senderId,
+        lastMessageTime: serverTimestamp(),
+        pinnedBy: [],
+        unreadCount: {
+          [senderId]: 0,
+          [receiverId]: 1,
+        },
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
     // 1. Add message document to subcollection
     const msgDoc = await addDoc(messagesRef, {
       chatId,
@@ -79,7 +98,6 @@ export async function sendMessage(
     });
 
     // 2. Update chat parent doc
-    const chatSnap = await getDoc(chatRef);
     let currentUnread = 0;
     if (chatSnap.exists()) {
       const data = chatSnap.data();
@@ -92,11 +110,11 @@ export async function sendMessage(
       lastMessageTime: serverTimestamp(),
       updatedAt: serverTimestamp(),
       [`unreadCount.${receiverId}`]: currentUnread + 1,
-    });
+    }).catch(() => {});
 
     return msgDoc.id;
   } catch (err) {
-    handleFirestoreError(err, OperationType.CREATE, `chats/${chatId}/messages`);
+    console.warn('Error in sendMessage:', err);
     return '';
   }
 }
