@@ -10,6 +10,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   addDoc,
   query,
   where,
@@ -232,3 +233,52 @@ export async function togglePinChat(
     throw err;
   }
 }
+
+export async function deleteMessage(chatId: string, messageId: string): Promise<void> {
+  try {
+    const msgRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await deleteDoc(msgRef);
+  } catch (err) {
+    console.warn('Error deleting message:', err);
+    throw err;
+  }
+}
+
+export async function toggleMessageReaction(
+  chatId: string,
+  messageId: string,
+  userId: string,
+  emoji: string
+): Promise<void> {
+  try {
+    const msgRef = doc(db, 'chats', chatId, 'messages', messageId);
+    const snap = await getDoc(msgRef);
+    if (!snap.exists()) return;
+
+    const currentReactions: Record<string, string[]> = snap.data()?.reactions || {};
+    const existingUsers = currentReactions[emoji] || [];
+
+    let updatedList: string[];
+    if (existingUsers.includes(userId)) {
+      // User is removing their reaction
+      updatedList = existingUsers.filter((id) => id !== userId);
+    } else {
+      // User is adding their reaction
+      updatedList = [...existingUsers, userId];
+    }
+
+    const nextReactions = { ...currentReactions };
+    if (updatedList.length > 0) {
+      nextReactions[emoji] = updatedList;
+    } else {
+      delete nextReactions[emoji];
+    }
+
+    await updateDoc(msgRef, {
+      reactions: nextReactions,
+    });
+  } catch (err) {
+    console.warn('Error toggling reaction:', err);
+  }
+}
+

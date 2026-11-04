@@ -271,3 +271,41 @@ export function markDemoViewOnceAsOpened(chatId: string, messageId: string) {
   } catch (e) {}
   window.dispatchEvent(new CustomEvent(`linkup_demo_msg_${chatId}`));
 }
+
+export function deleteDemoMessage(chatId: string, messageId: string) {
+  const current = getDemoMessages(chatId);
+  const updated = current.filter((m) => m.id !== messageId);
+  try {
+    localStorage.setItem(`${STORAGE_MESSAGES_KEY}_${chatId}`, JSON.stringify(updated));
+  } catch (e) {}
+  window.dispatchEvent(new CustomEvent(`linkup_demo_msg_${chatId}`));
+}
+
+export function toggleDemoMessageReaction(
+  chatId: string,
+  messageId: string,
+  userId: string,
+  emoji: string
+) {
+  const current = getDemoMessages(chatId);
+  const updated = current.map((m) => {
+    if (m.id !== messageId) return m;
+    const currentReactions: Record<string, string[]> = { ...(m.reactions || {}) };
+    const users = currentReactions[emoji] || [];
+    if (users.includes(userId)) {
+      const nextUsers = users.filter((u) => u !== userId);
+      if (nextUsers.length > 0) {
+        currentReactions[emoji] = nextUsers;
+      } else {
+        delete currentReactions[emoji];
+      }
+    } else {
+      currentReactions[emoji] = [...users, userId];
+    }
+    return { ...m, reactions: currentReactions };
+  });
+  try {
+    localStorage.setItem(`${STORAGE_MESSAGES_KEY}_${chatId}`, JSON.stringify(updated));
+  } catch (e) {}
+  window.dispatchEvent(new CustomEvent(`linkup_demo_msg_${chatId}`));
+}

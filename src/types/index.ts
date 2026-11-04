@@ -72,6 +72,7 @@ export interface Message {
   timestamp: any;
   seen: boolean;
   delivered: boolean;
+  reactions?: Record<string, string[]>; // { [emoji]: [userId1, userId2] }
   replyTo?: {
     id: string;
     text: string;
@@ -101,6 +102,8 @@ export interface CallSession {
   receiverId: string;
   type: CallType;
   status: 'calling' | 'accepted' | 'declined' | 'ended';
+  offer?: any;
+  answer?: any;
   createdAt: any;
   endedAt?: any;
 }

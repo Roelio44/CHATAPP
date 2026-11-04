@@ -24,6 +24,8 @@ import {
   Mic,
   Lock,
   EyeOff,
+  Trash2,
+  Plus,
 } from 'lucide-react';
 import {
   db,
@@ -35,7 +37,13 @@ import {
   OperationType,
 } from '../firebase/config';
 import { Message, UserProfile } from '../types';
-import { sendMessage, markMessagesAsSeen, markViewOnceAsOpened } from '../services/chatService';
+import {
+  sendMessage,
+  markMessagesAsSeen,
+  markViewOnceAsOpened,
+  deleteMessage,
+  toggleMessageReaction,
+} from '../services/chatService';
 import { formatMessageTime, formatLastSeen } from '../utils/formatTime';
 import { VerifiedBadge } from './VerifiedBadge';
 import { CallModal, CallType } from './CallModal';
@@ -43,6 +51,7 @@ import { compressImageFile } from '../utils/imageCompressor';
 import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 import { VoiceRecorderBar } from './VoiceRecorderBar';
 import { ViewOncePhotoModal } from './ViewOncePhotoModal';
+import { ComprehensiveEmojiPicker } from './ComprehensiveEmojiPicker';
 
 interface ChatRoomScreenProps {
   chatId: string;
@@ -71,6 +80,10 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   const [isSending, setIsSending] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [activeCall, setActiveCall] = useState<CallType | null>(null);
+  const [activeReactionMenuMsgId, setActiveReactionMenuMsgId] = useState<string | null>(null);
+  const [pickerForReactionMsgId, setPickerForReactionMsgId] = useState<string | null>(null);
+  const [messageToDelete, setMessageToDelete] = useState<Message | null>(null);
+  const lastCallSummaryTimeRef = useRef<number>(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -114,6 +127,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             seen: data.seen ?? false,
             delivered: data.delivered ?? true,
             replyTo: data.replyTo || undefined,
+            reactions: data.reactions || undefined,
           });
         });
 
@@ -154,6 +168,13 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
     wasConnected: boolean
   ) => {
     setActiveCall(null);
+    const now = Date.now();
+    // Guard against duplicate / spam summary messages
+    if (now - lastCallSummaryTimeRef.current < 4000) {
+      return;
+    }
+    lastCallSummaryTimeRef.current = now;
+
     let summary = '';
     if (wasConnected && durationSeconds > 0) {
       const mins = Math.floor(durationSeconds / 60);
@@ -302,6 +323,36 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   const handleAddEmoji = (emoji: string) => {
     setInputText((prev) => prev + emoji);
     inputRef.current?.focus();
+  };
+
+  const handleToggleReaction = async (messageId: string, emoji: string) => {
+    setActiveReactionMenuMsgId(null);
+    try {
+      if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
+        const { toggleDemoMessageReaction } = await import('../services/demoService');
+        toggleDemoMessageReaction(chatId, messageId, currentUser.uid, emoji);
+      } else {
+        await toggleMessageReaction(chatId, messageId, currentUser.uid, emoji);
+      }
+    } catch (err) {
+      console.error('Error toggling reaction:', err);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!messageToDelete) return;
+    const id = messageToDelete.id;
+    setMessageToDelete(null);
+    try {
+      if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
+        const { deleteDemoMessage } = await import('../services/demoService');
+        deleteDemoMessage(chatId, id);
+      } else {
+        await deleteMessage(chatId, id);
+      }
+    } catch (err) {
+      console.error('Error deleting message:', err);
+    }
   };
 
   return (
@@ -543,16 +594,111 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                   </div>
                 </div>
 
-                {/* Reply action button on hover */}
-                <button
-                  onClick={() => setReplyingTo(msg)}
-                  className={`mt-1 text-[11px] text-zinc-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 cursor-pointer ${
-                    isMe ? 'mr-1' : 'ml-1'
+                {/* Message Reactions Pills */}
+                {msg.reactions && Object.keys(msg.reactions).length > 0 && (
+                  <div
+                    className={`flex flex-wrap gap-1 mt-1 z-10 ${
+                      isMe ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    {Object.entries(msg.reactions).map(([emoji, uids]) => {
+                      if (!uids || uids.length === 0) return null;
+                      const hasReacted = uids.includes(currentUser.uid);
+                      return (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleToggleReaction(msg.id, emoji)}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border shadow-xs transition-transform active:scale-90 cursor-pointer ${
+                            hasReacted
+                              ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 font-semibold'
+                              : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                          }`}
+                          title={`${uids.length} reaction${uids.length > 1 ? 's' : ''}${
+                            hasReacted ? ' (tap to remove)' : ' (tap to add)'
+                          }`}
+                        >
+                          <span className="text-sm leading-none">{emoji}</span>
+                          <span className="text-[10px] font-medium leading-none">{uids.length}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Message Action Toolbar (React, Reply, Delete) */}
+                <div
+                  className={`relative flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity ${
+                    isMe ? 'justify-end mr-1' : 'justify-start ml-1'
                   }`}
                 >
-                  <Reply className="w-3 h-3" />
-                  <span>Reply</span>
-                </button>
+                  {/* Quick Reaction floating bubble */}
+                  {activeReactionMenuMsgId === msg.id && (
+                    <div
+                      className={`absolute bottom-full mb-1 z-30 flex items-center gap-1 p-1 bg-white dark:bg-zinc-900 rounded-full shadow-xl border border-zinc-200 dark:border-zinc-700 ${
+                        isMe ? 'right-0' : 'left-0'
+                      }`}
+                    >
+                      {['❤️', '👍', '😂', '😮', '😢', '🔥'].map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => handleToggleReaction(msg.id, emoji)}
+                          className="w-7 h-7 flex items-center justify-center text-base hover:scale-125 transition-transform cursor-pointer rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveReactionMenuMsgId(null);
+                          setPickerForReactionMsgId(msg.id);
+                        }}
+                        className="w-7 h-7 flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:scale-110 transition-transform cursor-pointer rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        title="All emojis"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+
+                  {/* React Button */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setActiveReactionMenuMsgId(
+                        activeReactionMenuMsgId === msg.id ? null : msg.id
+                      )
+                    }
+                    className="p-1 rounded-full text-zinc-400 hover:text-amber-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="React"
+                  >
+                    <Smile className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Reply Button */}
+                  <button
+                    type="button"
+                    onClick={() => setReplyingTo(msg)}
+                    className="p-1 rounded-full text-zinc-400 hover:text-blue-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Reply"
+                  >
+                    <Reply className="w-3.5 h-3.5" />
+                  </button>
+
+                  {/* Delete Button (Sender or Admin) */}
+                  {(isMe || currentUser.role === 'admin') && (
+                    <button
+                      type="button"
+                      onClick={() => setMessageToDelete(msg)}
+                      className="p-1 rounded-full text-zinc-400 hover:text-red-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                      title="Delete message"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })
@@ -561,24 +707,14 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         </div>
       </div>
 
-      {/* Quick Emojis bar */}
+      {/* Comprehensive Emojis picker for input */}
       {showEmojiPicker && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 10 }}
-          className="px-4 py-2 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-center gap-4"
-        >
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              onClick={() => handleAddEmoji(emoji)}
-              className="text-xl p-1 hover:scale-125 transition-transform cursor-pointer"
-            >
-              {emoji}
-            </button>
-          ))}
-        </motion.div>
+        <div className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 z-20">
+          <ComprehensiveEmojiPicker
+            onSelectEmoji={handleAddEmoji}
+            onClose={() => setShowEmojiPicker(false)}
+          />
+        </div>
       )}
 
       {/* Attached Photo Preview Above Input */}
@@ -841,6 +977,81 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             viewerUserId={currentUser.userId}
             onClose={handleCloseViewOnce}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Reaction Emoji Picker Modal */}
+      <AnimatePresence>
+        {pickerForReactionMsgId && (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setPickerForReactionMsgId(null)}
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800"
+            >
+              <ComprehensiveEmojiPicker
+                isReactionMode={true}
+                onSelectEmoji={(emoji) => {
+                  handleToggleReaction(pickerForReactionMsgId, emoji);
+                  setPickerForReactionMsgId(null);
+                }}
+                onClose={() => setPickerForReactionMsgId(null)}
+              />
+            </div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Message Confirmation Dialog */}
+      <AnimatePresence>
+        {messageToDelete && (
+          <div
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+            onClick={() => setMessageToDelete(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-zinc-900 rounded-2xl p-5 max-w-sm w-full shadow-2xl border border-zinc-200 dark:border-zinc-800"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
+                  <Trash2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-zinc-900 dark:text-zinc-100 text-sm">
+                    Delete Message?
+                  </h3>
+                  <p className="text-[11px] text-zinc-500">
+                    This action will delete this message for everyone.
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-5 leading-relaxed bg-zinc-50 dark:bg-zinc-800/50 p-2.5 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                Are you sure you want to delete this message? It will be removed permanently from the chat.
+              </p>
+              <div className="flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setMessageToDelete(null)}
+                  className="px-4 py-2 text-xs font-medium rounded-xl text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmDelete}
+                  className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer shadow-xs"
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>

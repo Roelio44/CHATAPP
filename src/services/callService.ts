@@ -9,6 +9,7 @@ import {
   doc,
   setDoc,
   updateDoc,
+  addDoc,
   onSnapshot,
   query,
   where,
@@ -16,6 +17,16 @@ import {
   deleteDoc,
 } from '../firebase/config';
 import { CallSession, CallType, UserProfile } from '../types';
+
+export const RTC_CONFIG: RTCConfiguration = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
+  ],
+};
 
 /**
  * Initiates an outgoing call in Firestore
@@ -44,6 +55,90 @@ export async function initiateCall(
 
   await setDoc(callRef, sessionData);
   return callId;
+}
+
+/**
+ * Saves WebRTC Offer to the call document
+ */
+export async function saveCallOffer(
+  callId: string,
+  offer: RTCSessionDescriptionInit
+): Promise<void> {
+  try {
+    const callRef = doc(db, 'calls', callId);
+    await updateDoc(callRef, {
+      offer: {
+        sdp: offer.sdp,
+        type: offer.type,
+      },
+    });
+  } catch (err) {
+    console.warn('Error saving call offer:', err);
+  }
+}
+
+/**
+ * Saves WebRTC Answer to the call document
+ */
+export async function saveCallAnswer(
+  callId: string,
+  answer: RTCSessionDescriptionInit
+): Promise<void> {
+  try {
+    const callRef = doc(db, 'calls', callId);
+    await updateDoc(callRef, {
+      answer: {
+        sdp: answer.sdp,
+        type: answer.type,
+      },
+      status: 'accepted',
+    });
+  } catch (err) {
+    console.warn('Error saving call answer:', err);
+  }
+}
+
+/**
+ * Sends an ICE Candidate to the subcollection for the peer
+ */
+export async function addIceCandidate(
+  callId: string,
+  role: 'caller' | 'callee',
+  candidate: RTCIceCandidate
+): Promise<void> {
+  try {
+    const subcollectionName = role === 'caller' ? 'callerCandidates' : 'calleeCandidates';
+    const candidatesCol = collection(db, 'calls', callId, subcollectionName);
+    await addDoc(candidatesCol, candidate.toJSON());
+  } catch (err) {
+    console.warn('Error adding ICE candidate:', err);
+  }
+}
+
+/**
+ * Listens for ICE candidates sent by the peer
+ */
+export function listenToIceCandidates(
+  callId: string,
+  peerRole: 'caller' | 'callee',
+  onCandidate: (candidate: RTCIceCandidateInit) => void
+): () => void {
+  const subcollectionName = peerRole === 'caller' ? 'callerCandidates' : 'calleeCandidates';
+  const candidatesCol = collection(db, 'calls', callId, subcollectionName);
+
+  return onSnapshot(
+    candidatesCol,
+    (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added') {
+          onCandidate(change.doc.data() as RTCIceCandidateInit);
+        }
+      });
+    },
+    (err) => {
+      console.warn('Notice listening to ICE candidates:', err);
+    }
+  );
 }
 
 /**

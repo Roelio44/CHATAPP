@@ -135,14 +135,15 @@ service cloud.firestore {
             isAdmin() ||
             incoming().senderId == request.auth.uid ||
             ('seen' in incoming()) ||
-            ('viewOnceOpened' in incoming())
+            ('viewOnceOpened' in incoming()) ||
+            ('reactions' in incoming())
           );
         allow delete: if isSignedIn() && isValidId(messageId)
           && (isAdmin() || existing().senderId == request.auth.uid);
       }
     }
 
-    // Calls Collection for Live Call Signaling (Ring, Accept, Decline, End)
+    // Calls Collection for Live Call Signaling (Ring, Accept, Decline, End, WebRTC SDP & ICE)
     match /calls/{callId} {
       allow get: if isSignedIn() && isValidId(callId);
       allow list: if isSignedIn();
@@ -160,6 +161,10 @@ service cloud.firestore {
           existing().callerId == request.auth.uid ||
           existing().receiverId == request.auth.uid
         );
+
+      match /{subcollection=**} {
+        allow read, write: if isSignedIn();
+      }
     }
   }
 }
