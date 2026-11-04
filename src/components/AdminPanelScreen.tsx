@@ -44,6 +44,7 @@ import {
   createSystemAlert,
   toggleSystemAlert,
   deleteSystemAlert,
+  cancelVerificationRequest,
 } from '../services/adminService';
 import { db, collection, query, orderBy, onSnapshot } from '../firebase/config';
 
@@ -64,7 +65,7 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
   const [alerts, setAlerts] = useState<SystemAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchUserQuery, setSearchUserQuery] = useState('');
-  const [userFilter, setUserFilter] = useState<'all' | 'verified' | 'banned'>('all');
+  const [userFilter, setUserFilter] = useState<'all' | 'verified' | 'banned' | 'requests'>('all');
 
   // Feedback notifications
   const [statusMessage, setStatusMessage] = useState<{
@@ -151,6 +152,7 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
     if (!matchesQuery) return false;
     if (userFilter === 'verified') return u.isVerified === true;
     if (userFilter === 'banned') return u.isBanned === true;
+    if (userFilter === 'requests') return (u.verificationRequested === true || u.verificationStatus === 'pending');
     return true;
   });
 
@@ -332,6 +334,7 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
   // Stats calculation
   const totalVerified = users.filter((u) => u.isVerified).length;
   const totalBanned = users.filter((u) => u.isBanned).length;
+  const totalRequests = users.filter((u) => u.verificationRequested || u.verificationStatus === 'pending').length;
   const activeAlertsCount = alerts.filter((a) => a.isActive).length;
 
   return (
@@ -543,6 +546,17 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
                   <Ban className="w-3.5 h-3.5" />
                   Banned ({totalBanned})
                 </button>
+                <button
+                  onClick={() => setUserFilter('requests')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors flex items-center gap-1.5 ${
+                    userFilter === 'requests'
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-white dark:bg-zinc-900 text-amber-600 dark:text-amber-400 border border-zinc-200 dark:border-zinc-800'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Requests ({totalRequests})
+                </button>
               </div>
             </div>
 
@@ -559,6 +573,7 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
                   const isVerified = user.isVerified === true;
                   const isBanned = user.isBanned === true;
                   const isSelf = user.email?.toLowerCase() === currentProfile.email?.toLowerCase();
+                  const hasPendingRequest = user.verificationRequested === true || user.verificationStatus === 'pending';
 
                   return (
                     <div
@@ -566,6 +581,8 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
                       className={`p-4 rounded-2xl bg-white dark:bg-zinc-900 border transition-all shadow-xs flex flex-col justify-between ${
                         isBanned
                           ? 'border-rose-300 dark:border-rose-900/50 bg-rose-50/20 dark:bg-rose-950/10'
+                          : hasPendingRequest
+                          ? 'border-amber-300 dark:border-amber-700/60 bg-amber-50/10 dark:bg-amber-950/10'
                           : isVerified
                           ? 'border-sky-300/80 dark:border-sky-900/40'
                           : 'border-zinc-200 dark:border-zinc-800'
@@ -595,6 +612,12 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
                               {user.fullName}
                             </span>
                             {isVerified && <VerifiedBadge size="sm" />}
+                            {hasPendingRequest && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                                <Sparkles className="w-3 h-3" />
+                                <span>Request Pending</span>
+                              </span>
+                            )}
                             {isBanned && (
                               <span className="px-1.5 py-0.5 rounded-md bg-rose-500/15 text-rose-600 dark:text-rose-400 text-[10px] font-bold uppercase tracking-wider">
                                 Banned
@@ -614,6 +637,49 @@ export const AdminPanelScreen: React.FC<AdminPanelScreenProps> = ({
                           <div className="text-[11px] text-zinc-400 truncate mt-0.5">
                             {user.email || 'No email registered'}
                           </div>
+
+                          {/* Verification Request Reason Callout */}
+                          {hasPendingRequest && (
+                            <div className="mt-2 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 p-2.5 rounded-xl">
+                              <span className="font-semibold text-[10px] block text-amber-700 dark:text-amber-300 uppercase tracking-wider mb-0.5">
+                                Verification Note:
+                              </span>
+                              <p className="italic text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed mb-2">
+                                "{user.verificationReason || 'No details specified'}"
+                              </p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleVerify(user)}
+                                  className="px-2.5 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-bold flex items-center gap-1 shadow-xs cursor-pointer"
+                                >
+                                  <Check className="w-3 h-3" />
+                                  <span>Approve & Verify</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await cancelVerificationRequest(user.uid);
+                                      setUsers((prev) =>
+                                        prev.map((u) =>
+                                          u.uid === user.uid
+                                            ? { ...u, verificationRequested: false, verificationStatus: 'rejected' }
+                                            : u
+                                        )
+                                      );
+                                      notify(`Declined verification request for @${user.userId}`);
+                                    } catch (e) {
+                                      notify('Failed to decline request', 'error');
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-zinc-200 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-[11px] font-medium cursor-pointer"
+                                >
+                                  Decline
+                                </button>
+                              </div>
+                            </div>
+                          )}
 
                           {isBanned && user.banReason && (
                             <div className="mt-2 text-[11px] text-rose-500 font-medium bg-rose-500/10 px-2 py-1 rounded-md">

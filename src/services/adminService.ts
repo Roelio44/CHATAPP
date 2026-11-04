@@ -67,10 +67,66 @@ export async function setUserVerification(
     await updateDoc(userRef, {
       isVerified,
       verifiedAt: isVerified ? serverTimestamp() : null,
+      verificationRequested: false,
+      verificationStatus: isVerified ? 'approved' : 'none',
     });
   } catch (err) {
     // Fallback for demo mode
-    updateLocalDemoUser(uid, { isVerified, verifiedAt: isVerified ? new Date().toISOString() : null });
+    updateLocalDemoUser(uid, {
+      isVerified,
+      verifiedAt: isVerified ? new Date().toISOString() : null,
+      verificationRequested: false,
+      verificationStatus: isVerified ? 'approved' : 'none',
+    });
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+  }
+}
+
+/**
+ * Submit a request to be a verified user with a blue tick badge
+ */
+export async function submitVerificationRequest(
+  uid: string,
+  reason: string
+): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      verificationRequested: true,
+      verificationStatus: 'pending',
+      verificationRequestDate: serverTimestamp(),
+      verificationReason: reason.trim(),
+    });
+  } catch (err) {
+    updateLocalDemoUser(uid, {
+      verificationRequested: true,
+      verificationStatus: 'pending',
+      verificationReason: reason.trim(),
+      verificationRequestDate: new Date().toISOString(),
+    });
+    handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
+  }
+}
+
+/**
+ * Cancel a pending verification request
+ */
+export async function cancelVerificationRequest(
+  uid: string
+): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      verificationRequested: false,
+      verificationStatus: 'none',
+      verificationReason: '',
+    });
+  } catch (err) {
+    updateLocalDemoUser(uid, {
+      verificationRequested: false,
+      verificationStatus: 'none',
+      verificationReason: '',
+    });
     handleFirestoreError(err, OperationType.UPDATE, `users/${uid}`);
   }
 }

@@ -561,7 +561,7 @@ export const CallModal: React.FC<CallModalProps> = ({
           </div>
 
           <p className="text-[11px] text-zinc-500">
-            LinkUp WebRTC Real-Time Audio & Video Call
+            AlbaniaCHAT WebRTC Real-Time Audio & Video Call
           </p>
         </div>
       </div>

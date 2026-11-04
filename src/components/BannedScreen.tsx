@@ -46,7 +46,7 @@ export const BannedScreen: React.FC<BannedScreenProps> = ({ userProfile }) => {
             Reason for suspension:
           </span>
           <p className="text-xs text-rose-300 font-medium leading-relaxed">
-            {userProfile.banReason || 'Violation of LinkUp Messenger Terms of Service or community safety guidelines.'}
+            {userProfile.banReason || 'Violation of AlbaniaCHAT Terms of Service or community safety guidelines.'}
           </p>
         </div>
 

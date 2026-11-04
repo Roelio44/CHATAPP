@@ -15,6 +15,10 @@ export interface UserProfile {
   createdAt: any;
   isVerified?: boolean; // Blue tick verified account
   verifiedAt?: any;
+  verificationRequested?: boolean;
+  verificationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  verificationReason?: string;
+  verificationRequestDate?: any;
   isBanned?: boolean; // Admin moderation ban
   banReason?: string;
   bannedAt?: any;

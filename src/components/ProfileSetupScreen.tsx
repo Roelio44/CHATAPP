@@ -271,7 +271,7 @@ export const ProfileSetupScreen: React.FC = () => {
             Bio <span className="text-zinc-400 lowercase font-normal">(optional)</span>
           </label>
           <textarea
-            placeholder="Available on LinkUp..."
+            placeholder="Available on AlbaniaCHAT..."
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             rows={2}
@@ -289,7 +289,7 @@ export const ProfileSetupScreen: React.FC = () => {
           {isSubmitting ? (
             <Loader2 className="w-5 h-5 animate-spin" />
           ) : (
-            <span>Complete Setup & Enter LinkUp</span>
+            <span>Complete Setup & Enter AlbaniaCHAT</span>
           )}
         </button>
       </form>

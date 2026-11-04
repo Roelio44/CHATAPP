@@ -4,7 +4,7 @@
  */
 
 /**
- * Push / Web Notifications Service for LinkUp Messenger
+ * Push / Web Notifications Service for AlbaniaCHAT
  */
 
 export async function requestNotificationPermission(): Promise<boolean> {

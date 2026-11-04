@@ -71,7 +71,7 @@ export const AuthScreen: React.FC = () => {
         </motion.div>
 
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          LinkUp Messenger
+          AlbaniaCHAT
         </h1>
         <p className="mt-1.5 text-sm text-zinc-500 dark:text-zinc-400">
           Connect seamlessly with real-time conversations
@@ -238,7 +238,7 @@ export const AuthScreen: React.FC = () => {
 
       {/* Footer Info */}
       <div className="text-center text-[11px] text-zinc-400 dark:text-zinc-500">
-        By continuing, you agree to LinkUp Messenger's Terms & Privacy.
+        By continuing, you agree to AlbaniaCHAT's Terms & Privacy.
       </div>
     </div>
   );

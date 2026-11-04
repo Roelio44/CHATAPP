@@ -76,9 +76,9 @@ function MainApp() {
   // Sync document title with unread count for authentic webapp experience
   useEffect(() => {
     if (unreadChatsCount > 0) {
-      document.title = `(${unreadChatsCount}) LinkUp Messenger`;
+      document.title = `(${unreadChatsCount}) AlbaniaCHAT`;
     } else {
-      document.title = 'LinkUp Messenger';
+      document.title = 'AlbaniaCHAT';
     }
   }, [unreadChatsCount]);
 
@@ -163,7 +163,7 @@ function MainApp() {
 
       if (session && session.status === 'calling') {
         sendWebNotification(`Incoming ${session.type} call`, {
-          body: `${session.callerName} is calling you on LinkUp Messenger...`,
+          body: `${session.callerName} is calling you on AlbaniaCHAT...`,
           tag: session.callId,
           requireInteraction: true,
         });
@@ -222,7 +222,7 @@ function MainApp() {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950">
         <div className="w-10 h-10 rounded-full border-3 border-blue-600 border-t-transparent animate-spin" />
-        <span className="mt-3 text-xs font-medium text-zinc-400">Loading LinkUp Messenger...</span>
+        <span className="mt-3 text-xs font-medium text-zinc-400">Loading AlbaniaCHAT...</span>
       </div>
     );
   }

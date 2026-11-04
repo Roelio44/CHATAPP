@@ -17,6 +17,11 @@ import {
   Info,
   Check,
   ShieldCheck,
+  Sparkles,
+  Clock,
+  Send,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +30,11 @@ import {
   requestNotificationPermission,
   sendWebNotification,
 } from '../utils/notificationService';
+import { VerifiedBadge } from './VerifiedBadge';
+import {
+  submitVerificationRequest,
+  cancelVerificationRequest,
+} from '../services/adminService';
 
 interface SettingsScreenProps {
   currentProfile: UserProfile;
@@ -43,6 +53,63 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
   const [notifications, setNotifications] = useState(true);
+
+  // Verification request state
+  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [verificationReason, setVerificationReason] = useState('');
+  const [isSubmittingVerification, setIsSubmittingVerification] = useState(false);
+  const [verificationFeedback, setVerificationFeedback] = useState<{
+    text: string;
+    type: 'success' | 'error';
+  } | null>(null);
+  const [localVerificationStatus, setLocalVerificationStatus] = useState<string>(
+    currentProfile.verificationStatus || (currentProfile.verificationRequested ? 'pending' : 'none')
+  );
+
+  const handleSubmitVerification = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!verificationReason.trim() || isSubmittingVerification) return;
+
+    setIsSubmittingVerification(true);
+    try {
+      await submitVerificationRequest(currentProfile.uid, verificationReason);
+      setLocalVerificationStatus('pending');
+      setVerificationFeedback({
+        text: 'Verification request submitted! Administrators will review your profile.',
+        type: 'success',
+      });
+      setIsVerificationModalOpen(false);
+      setVerificationReason('');
+    } catch (err: any) {
+      setVerificationFeedback({
+        text: 'Failed to submit verification request. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setIsSubmittingVerification(false);
+      setTimeout(() => setVerificationFeedback(null), 5000);
+    }
+  };
+
+  const handleCancelVerification = async () => {
+    setIsSubmittingVerification(true);
+    try {
+      await cancelVerificationRequest(currentProfile.uid);
+      setLocalVerificationStatus('none');
+      setVerificationFeedback({
+        text: 'Verification request cancelled.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      setVerificationFeedback({
+        text: 'Failed to cancel request.',
+        type: 'error',
+      });
+    } finally {
+      setIsSubmittingVerification(false);
+      setTimeout(() => setVerificationFeedback(null), 4000);
+    }
+  };
 
   const themeOptions: { id: ThemePreference; label: string; desc: string; icon: React.FC<{ className?: string }> }[] = [
     {
@@ -246,7 +313,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   if (next) {
                     const granted = await requestNotificationPermission();
                     if (granted) {
-                      sendWebNotification('LinkUp Messenger', {
+                      sendWebNotification('AlbaniaCHAT', {
                         body: 'Push notifications are active for incoming calls and messages!',
                       });
                     }
@@ -263,6 +330,103 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 />
               </button>
             </div>
+          </div>
+        </div>
+
+        {/* Verification Status Feedback Toast */}
+        {verificationFeedback && (
+          <div
+            className={`p-3 rounded-2xl text-xs font-semibold flex items-center gap-2 shadow-xs ${
+              verificationFeedback.type === 'success'
+                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30'
+                : 'bg-rose-500/15 text-rose-700 dark:text-rose-300 border border-rose-500/30'
+            }`}
+          >
+            {verificationFeedback.type === 'success' ? (
+              <Check className="w-4 h-4 shrink-0 text-emerald-600" />
+            ) : (
+              <Info className="w-4 h-4 shrink-0 text-rose-600" />
+            )}
+            <span>{verificationFeedback.text}</span>
+          </div>
+        )}
+
+        {/* Verification Request Section */}
+        <div>
+          <div className="px-1 mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+            <VerifiedBadge size="xs" />
+            <span>Account Verification</span>
+          </div>
+
+          <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 p-4 shadow-xs">
+            {currentProfile.isVerified ? (
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-2xl bg-sky-500/10 text-sky-600 dark:text-sky-400 shrink-0">
+                  <VerifiedBadge size="md" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                    Verified Account
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                    Your profile has an official blue checkmark badge visible to all members in chats, calls, and search.
+                  </p>
+                </div>
+              </div>
+            ) : localVerificationStatus === 'pending' || currentProfile.verificationRequested ? (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-2xl bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      Verification Request Under Review
+                    </h4>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                      Your request for a verified blue tick badge has been submitted and is currently being reviewed by AlbaniaCHAT administrators.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCancelVerification}
+                  disabled={isSubmittingVerification}
+                  className="w-full py-2 px-3 rounded-xl bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium transition-all cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  {isSubmittingVerification ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <span>Cancel Pending Request</span>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 shrink-0">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+                      Request Verified User Badge
+                    </h4>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                      Get an official blue checkmark badge next to your name to establish authentic identity, trust, and prominence across AlbaniaCHAT.
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsVerificationModalOpen(true)}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 active:scale-98 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <VerifiedBadge size="xs" />
+                  <span>Request Verification Badge</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -297,17 +461,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* About App */}
         <div className="p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-center">
           <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-            LinkUp Messenger
+            AlbaniaCHAT
           </h4>
           <p className="text-[10px] text-zinc-400 mt-0.5">
-            Version 1.0.0 • Modern Android Edition
+            Version 2.0.0 • Modern Secure Edition
           </p>
         </div>
 
         {/* Logout */}
         <button
           onClick={() => {
-            if (confirm('Log out from LinkUp Messenger?')) {
+            if (confirm('Log out from AlbaniaCHAT?')) {
               logout();
             }
           }}
@@ -317,6 +481,84 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <span>Sign Out of Account</span>
         </button>
       </div>
+
+      {/* Verification Request Modal */}
+      {isVerificationModalOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setIsVerificationModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-3xl p-6 shadow-2xl border border-zinc-200 dark:border-zinc-800"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400 flex items-center justify-center">
+                  <VerifiedBadge size="sm" />
+                </div>
+                <h3 className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">
+                  Request Verification Badge
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsVerificationModalOpen(false)}
+                className="p-1 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitVerification} className="mt-4 space-y-4">
+              <div className="p-3 rounded-2xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-xs text-blue-900 dark:text-blue-200 leading-relaxed">
+                <span className="font-semibold block mb-0.5">Verification Criteria</span>
+                Verified blue checkmark badges establish authentic presence for notable members, active community members, creators, or official representatives on AlbaniaCHAT.
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300 mb-1.5">
+                  Why should your account be verified?
+                </label>
+                <textarea
+                  required
+                  rows={3}
+                  maxLength={300}
+                  placeholder="Describe your account, public profile, social links, or reason for requesting a verified badge..."
+                  value={verificationReason}
+                  onChange={(e) => setVerificationReason(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
+                />
+                <div className="text-right text-[10px] text-zinc-400 mt-1">
+                  {verificationReason.length} / 300 characters
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsVerificationModalOpen(false)}
+                  className="px-4 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={!verificationReason.trim() || isSubmittingVerification}
+                  className="px-4 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isSubmittingVerification ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5" />
+                  )}
+                  <span>Submit Request</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

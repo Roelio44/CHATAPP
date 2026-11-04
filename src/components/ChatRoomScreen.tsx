@@ -928,11 +928,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
               className="w-full max-w-4xl flex items-center justify-between pb-2 z-10"
               onClick={(e) => e.stopPropagation()}
             >
-              <span className="text-xs text-zinc-400 font-medium">LinkUp Photo Viewer</span>
+              <span className="text-xs text-zinc-400 font-medium">AlbaniaCHAT Photo Viewer</span>
               <div className="flex items-center gap-2">
                 <a
                   href={viewingPhotoUrl}
-                  download={`linkup_photo_${Date.now()}.jpg`}
+                  download={`albaniachat_photo_${Date.now()}.jpg`}
                   className="p-2 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-white transition-colors cursor-pointer flex items-center gap-1.5 text-xs px-3 shadow-md"
                   title="Save photo"
                 >

@@ -95,7 +95,7 @@ export const WebAppLayout: React.FC<WebAppLayoutProps> = ({
               <MessageSquareShare className="w-6 h-6" />
             </div>
             <span className="text-[10px] font-bold tracking-tight text-blue-600 dark:text-blue-400">
-              LinkUp
+              AlbaniaCHAT
             </span>
           </div>
 

@@ -129,7 +129,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </div>
 
           <p className="mt-3 text-xs text-zinc-600 dark:text-zinc-400 max-w-xs leading-relaxed">
-            {currentProfile.bio || 'Available on LinkUp Messenger'}
+            {currentProfile.bio || 'Available on AlbaniaCHAT'}
           </p>
 
           <button
@@ -203,7 +203,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         <div className="pt-2">
           <button
             onClick={() => {
-              if (confirm('Log out from LinkUp Messenger?')) {
+              if (confirm('Log out from AlbaniaCHAT?')) {
                 logout();
               }
             }}

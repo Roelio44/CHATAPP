@@ -263,7 +263,7 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
           <div className="flex flex-col items-center justify-center py-16 text-zinc-400">
             <Loader2 className="w-6 h-6 animate-spin mb-2 text-blue-500" />
             <span className="text-xs">
-              {isSearching ? 'Searching LinkUp directory...' : 'Loading members...'}
+              {isSearching ? 'Searching AlbaniaCHAT directory...' : 'Loading members...'}
             </span>
           </div>
         ) : hasSearched && results.length === 0 ? (
@@ -290,7 +290,7 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
               <Search className="w-6 h-6" />
             </div>
             <h3 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-              Find Friends on LinkUp
+              Find Friends on AlbaniaCHAT
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-xs mx-auto">
               Search by Unique User ID (@handle) or name above to start chatting and sending friend requests.

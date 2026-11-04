@@ -35,7 +35,7 @@ export const SplashScreen: React.FC<SplashScreenProps> = () => {
           transition={{ delay: 0.2, duration: 0.5 }}
           className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50"
         >
-          LinkUp Messenger
+          AlbaniaCHAT
         </motion.h1>
 
         <motion.div

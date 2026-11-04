@@ -172,7 +172,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
               @{currentProfile.userId}
             </div>
             <p className="text-[10px] text-zinc-400 mt-1">
-              User ID is your permanent LinkUp handle.
+              User ID is your permanent AlbaniaCHAT handle.
             </p>
           </div>
 

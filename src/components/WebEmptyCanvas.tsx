@@ -26,7 +26,7 @@ export const WebEmptyCanvas: React.FC<WebEmptyCanvasProps> = ({ onNavigateTab })
         </div>
 
         <h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          LinkUp Messenger Web
+          AlbaniaCHAT Web
         </h2>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
           Select a chat from the sidebar to continue your conversation, or search for users by their unique User ID to connect in real time.

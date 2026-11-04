@@ -70,7 +70,7 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
         )}
         <p className="text-xs text-zinc-400 mt-2 flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-          <span>Ringing on LinkUp Messenger...</span>
+          <span>Ringing on AlbaniaCHAT...</span>
         </p>
 
         {/* Action Buttons: Decline and Accept */}

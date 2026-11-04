@@ -15,6 +15,10 @@
         "lastSeen": { "type": "string", "format": "date-time" },
         "createdAt": { "type": "string", "format": "date-time" },
         "isVerified": { "type": "boolean" },
+        "verificationRequested": { "type": "boolean" },
+        "verificationStatus": { "type": "string", "enum": ["none", "pending", "approved", "rejected"] },
+        "verificationReason": { "type": "string", "maxLength": 500 },
+        "verificationRequestDate": { "type": "string", "format": "date-time" },
         "isBanned": { "type": "boolean" },
         "banReason": { "type": "string", "maxLength": 500 },
         "role": { "type": "string", "enum": ["user", "admin"] }
