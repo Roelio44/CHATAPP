@@ -21,6 +21,9 @@ import {
   ZoomIn,
   Download,
   Loader2,
+  Mic,
+  Lock,
+  EyeOff,
 } from 'lucide-react';
 import {
   db,
@@ -32,11 +35,14 @@ import {
   OperationType,
 } from '../firebase/config';
 import { Message, UserProfile } from '../types';
-import { sendMessage, markMessagesAsSeen } from '../services/chatService';
+import { sendMessage, markMessagesAsSeen, markViewOnceAsOpened } from '../services/chatService';
 import { formatMessageTime, formatLastSeen } from '../utils/formatTime';
 import { VerifiedBadge } from './VerifiedBadge';
 import { CallModal, CallType } from './CallModal';
 import { compressImageFile } from '../utils/imageCompressor';
+import { VoiceMessagePlayer } from './VoiceMessagePlayer';
+import { VoiceRecorderBar } from './VoiceRecorderBar';
+import { ViewOncePhotoModal } from './ViewOncePhotoModal';
 
 interface ChatRoomScreenProps {
   chatId: string;
@@ -56,7 +62,10 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [isViewOnceActive, setIsViewOnceActive] = useState(false);
   const [isCompressing, setIsCompressing] = useState(false);
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false);
+  const [activeViewOnceMsg, setActiveViewOnceMsg] = useState<Message | null>(null);
   const [viewingPhotoUrl, setViewingPhotoUrl] = useState<string | null>(null);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [isSending, setIsSending] = useState(false);
@@ -96,6 +105,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
             senderId: data.senderId,
             text: data.text || '',
             imageUrl: data.imageUrl || undefined,
+            isViewOnce: data.isViewOnce || false,
+            viewOnceOpened: data.viewOnceOpened || false,
+            viewOnceOpenedAt: data.viewOnceOpenedAt || undefined,
+            audioUrl: data.audioUrl || undefined,
+            audioDuration: data.audioDuration || undefined,
             timestamp: data.timestamp,
             seen: data.seen ?? false,
             delivered: data.delivered ?? true,
@@ -186,10 +200,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
     const text = inputText;
     const photoToSend = selectedPhoto;
+    const isViewOnce = isViewOnceActive;
     const replyMeta = replyingTo
       ? {
           id: replyingTo.id,
-          text: replyingTo.text || (replyingTo.imageUrl ? '📷 Photo' : ''),
+          text: replyingTo.text || (replyingTo.imageUrl ? (replyingTo.isViewOnce ? '🔒 View once photo' : '📷 Photo') : replyingTo.audioUrl ? '🎤 Voice note' : ''),
           senderName:
             replyingTo.senderId === currentUser.uid
               ? 'You'
@@ -199,13 +214,16 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
     setInputText('');
     setSelectedPhoto(null);
+    setIsViewOnceActive(false);
     setReplyingTo(null);
     setShowEmojiPicker(false);
     setIsSending(true);
 
     if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
       const { sendDemoMessage } = await import('../services/demoService');
-      sendDemoMessage(chatId, currentUser.uid, text, replyMeta, photoToSend || undefined);
+      sendDemoMessage(chatId, currentUser.uid, text, replyMeta, photoToSend || undefined, {
+        isViewOnce,
+      });
       setIsSending(false);
       inputRef.current?.focus();
       return;
@@ -218,13 +236,66 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         otherUser.uid,
         text,
         replyMeta,
-        photoToSend || undefined
+        photoToSend || undefined,
+        {
+          isViewOnce,
+        }
       );
     } catch (err) {
       console.error('Failed to send message:', err);
     } finally {
       setIsSending(false);
       inputRef.current?.focus();
+    }
+  };
+
+  const handleSendVoiceMessage = async (audioDataUrl: string, durationSeconds: number) => {
+    setIsRecordingVoice(false);
+    setIsSending(true);
+    try {
+      if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
+        const { sendDemoMessage } = await import('../services/demoService');
+        sendDemoMessage(chatId, currentUser.uid, '', undefined, undefined, {
+          audioUrl: audioDataUrl,
+          audioDuration: durationSeconds,
+        });
+      } else {
+        await sendMessage(chatId, currentUser.uid, otherUser.uid, '', undefined, undefined, {
+          audioUrl: audioDataUrl,
+          audioDuration: durationSeconds,
+        });
+      }
+    } catch (err) {
+      console.error('Failed to send voice note:', err);
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleOpenViewOnce = (msg: Message) => {
+    if (msg.senderId === currentUser.uid) {
+      return;
+    }
+    if (msg.viewOnceOpened) {
+      return;
+    }
+    setActiveViewOnceMsg(msg);
+  };
+
+  const handleCloseViewOnce = async () => {
+    if (!activeViewOnceMsg) return;
+    const msgToMark = activeViewOnceMsg;
+    setActiveViewOnceMsg(null);
+
+    try {
+      if (chatId.startsWith('demo_') || currentUser.uid.startsWith('demo_')) {
+        const { markDemoViewOnceAsOpened } = await import('../services/demoService');
+        markDemoViewOnceAsOpened(chatId, msgToMark.id);
+      } else {
+        await markViewOnceAsOpened(chatId, msgToMark.id);
+      }
+    } catch (e) {
+      console.warn('Error marking view once photo as opened:', e);
     }
   };
 
@@ -366,8 +437,65 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                     </div>
                   )}
 
-                  {/* Attached photo if present */}
-                  {msg.imageUrl && (
+                  {/* Voice Message Note if present */}
+                  {msg.audioUrl && (
+                    <div className="mb-1">
+                      <VoiceMessagePlayer
+                        audioUrl={msg.audioUrl}
+                        duration={msg.audioDuration}
+                        isMe={isMe}
+                      />
+                    </div>
+                  )}
+
+                  {/* View Once Photo message */}
+                  {msg.isViewOnce && (
+                    <div className="mb-1.5">
+                      {isMe ? (
+                        <div className="flex items-center gap-2 p-2 rounded-xl bg-blue-700/60 text-blue-100 text-xs">
+                          <div className="w-6 h-6 rounded-full border border-blue-200 flex items-center justify-center font-bold text-[11px] shrink-0">
+                            1
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-semibold block">View-once photo</span>
+                            <span className="text-[10px] text-blue-200 block truncate">
+                              {msg.viewOnceOpened ? 'Opened by recipient' : 'Sent • Disappears after viewing'}
+                            </span>
+                          </div>
+                        </div>
+                      ) : msg.viewOnceOpened ? (
+                        <div className="flex items-center gap-2 p-2 rounded-xl bg-zinc-100 dark:bg-zinc-700/40 text-zinc-400 dark:text-zinc-500 text-xs select-none">
+                          <div className="w-6 h-6 rounded-full border border-zinc-300 dark:border-zinc-600 flex items-center justify-center font-bold text-[11px] shrink-0">
+                            1
+                          </div>
+                          <div className="min-w-0">
+                            <span className="font-semibold block line-through">Photo</span>
+                            <span className="text-[10px] block">Opened • Disappeared</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenViewOnce(msg)}
+                          className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 text-xs font-semibold cursor-pointer transition-all active:scale-95"
+                          title="Open view-once photo"
+                        >
+                          <div className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                            1
+                          </div>
+                          <div className="text-left min-w-0">
+                            <span className="block font-bold">Photo</span>
+                            <span className="text-[10px] font-normal text-amber-600 dark:text-amber-400 block truncate">
+                              View once • Tap to open
+                            </span>
+                          </div>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Standard Photo (non view-once) */}
+                  {msg.imageUrl && !msg.isViewOnce && (
                     <div
                       onClick={() => setViewingPhotoUrl(msg.imageUrl || null)}
                       className="mb-2 relative rounded-xl overflow-hidden cursor-pointer group/photo bg-black/5 dark:bg-black/30"
@@ -455,24 +583,56 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
       {/* Attached Photo Preview Above Input */}
       {selectedPhoto && (
-        <div className="px-4 py-2 bg-blue-50/90 dark:bg-zinc-900 border-t border-blue-200/60 dark:border-zinc-800">
+        <div className="px-4 py-2.5 bg-blue-50/90 dark:bg-zinc-900 border-t border-blue-200/60 dark:border-zinc-800 transition-colors">
           <div className="max-w-4xl mx-auto flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0">
               <div className="relative w-12 h-12 rounded-lg overflow-hidden border border-blue-300 dark:border-zinc-700 shrink-0 bg-black/10">
                 <img src={selectedPhoto} alt="Attachment" className="w-full h-full object-cover" />
+                {isViewOnceActive && (
+                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-amber-400 font-bold text-xs">
+                    1
+                  </div>
+                )}
               </div>
-              <div className="text-xs">
-                <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
-                  <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                  Photo attached
+              <div className="text-xs min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-1">
+                    <ImageIcon className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                    Photo attached
+                  </span>
+
+                  {/* View Once Toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsViewOnceActive(!isViewOnceActive)}
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                      isViewOnceActive
+                        ? 'bg-amber-500 text-white shadow-xs ring-2 ring-amber-400/40'
+                        : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-300 dark:hover:bg-zinc-700'
+                    }`}
+                    title={isViewOnceActive ? 'View-once enabled (tap to disable)' : 'Tap to make photo view-once (1 time only, screenshots blocked)'}
+                  >
+                    <span className="w-3.5 h-3.5 rounded-full border border-current flex items-center justify-center text-[9px] font-extrabold leading-none">
+                      1
+                    </span>
+                    <span>{isViewOnceActive ? 'View Once (1 Time)' : '1 Time'}</span>
+                  </button>
+                </div>
+                <span className={`text-[11px] block truncate ${isViewOnceActive ? 'text-amber-600 dark:text-amber-400 font-medium' : 'text-zinc-500'}`}>
+                  {isViewOnceActive
+                    ? '🔒 View once: Disappears after opening • Screenshots blocked'
+                    : 'Standard photo • Click "1 Time" to make it view-once'}
                 </span>
-                <span className="text-zinc-500 text-[11px]">Type an optional caption below and press Send</span>
               </div>
             </div>
+
             <button
               type="button"
-              onClick={() => setSelectedPhoto(null)}
-              className="p-1.5 rounded-full text-zinc-400 hover:text-red-500 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              onClick={() => {
+                setSelectedPhoto(null);
+                setIsViewOnceActive(false);
+              }}
+              className="p-1.5 rounded-full text-zinc-400 hover:text-red-500 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
               title="Remove photo"
             >
               <X className="w-4 h-4" />
@@ -493,7 +653,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                   {replyingTo.senderId === currentUser.uid ? 'yourself' : otherUser.fullName}
                 </span>
                 <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate">
-                  {replyingTo.text || (replyingTo.imageUrl ? '📷 Photo' : '')}
+                  {replyingTo.text || (replyingTo.imageUrl ? (replyingTo.isViewOnce ? '🔒 View once photo' : '📷 Photo') : replyingTo.audioUrl ? '🎤 Voice note' : '')}
                 </p>
               </div>
             </div>
@@ -513,72 +673,95 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         className="px-4 py-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors"
       >
         <div className="max-w-4xl mx-auto flex items-center gap-2 w-full">
-          {/* Hidden file input for photo upload */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handlePhotoSelect}
-          />
-
-          {/* Photo attach button */}
-          <button
-            type="button"
-            disabled={isCompressing || isSending}
-            onClick={() => fileInputRef.current?.click()}
-            className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
-            title="Send photo"
-          >
-            {isCompressing ? (
-              <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-            ) : (
-              <ImageIcon className="w-5 h-5" />
-            )}
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-            className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
-            title="Add emoji"
-          >
-            <Smile className="w-5 h-5" />
-          </button>
-
-          <div className="flex-1 relative">
-            <input
-              ref={inputRef}
-              type="text"
-              placeholder={
-                selectedPhoto
-                  ? 'Add a caption... (optional, press Enter to send)'
-                  : 'Type a message (Press Enter to send)...'
-              }
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSend();
-                }
-              }}
-              className="w-full px-4 py-2.5 text-sm rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 border border-transparent transition-all"
+          {isRecordingVoice ? (
+            <VoiceRecorderBar
+              onSendVoice={handleSendVoiceMessage}
+              onCancel={() => setIsRecordingVoice(false)}
             />
-          </div>
+          ) : (
+            <>
+              {/* Hidden file input for photo upload */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoSelect}
+              />
 
-          <button
-            type="submit"
-            disabled={(!inputText.trim() && !selectedPhoto) || isSending || isCompressing}
-            className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0"
-            title="Send message (Enter)"
-          >
-            {isSending ? (
-              <Loader2 className="w-4 h-4 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
-          </button>
+              {/* Photo attach button */}
+              <button
+                type="button"
+                disabled={isCompressing || isSending}
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                title="Send photo"
+              >
+                {isCompressing ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                ) : (
+                  <ImageIcon className="w-5 h-5" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+                title="Add emoji"
+              >
+                <Smile className="w-5 h-5" />
+              </button>
+
+              <div className="flex-1 relative">
+                <input
+                  ref={inputRef}
+                  type="text"
+                  placeholder={
+                    selectedPhoto
+                      ? isViewOnceActive
+                        ? 'Add a caption for view-once photo... (optional)'
+                        : 'Add a caption... (optional, press Enter to send)'
+                      : 'Type a message (Press Enter to send)...'
+                  }
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  className="w-full px-4 py-2.5 text-sm rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 border border-transparent transition-all"
+                />
+              </div>
+
+              {/* Show Mic button when input is empty, Send button when text or photo exists */}
+              {!inputText.trim() && !selectedPhoto ? (
+                <button
+                  type="button"
+                  onClick={() => setIsRecordingVoice(true)}
+                  className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title="Record voice message"
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={(!inputText.trim() && !selectedPhoto) || isSending || isCompressing}
+                  className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  title="Send message (Enter)"
+                >
+                  {isSending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                </button>
+              )}
+            </>
+          )}
         </div>
       </form>
 
@@ -646,6 +829,18 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
               Tap anywhere outside or press Close to dismiss
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* View-Once Protected Photo Modal with Screenshot Prevention */}
+      <AnimatePresence>
+        {activeViewOnceMsg && (
+          <ViewOncePhotoModal
+            imageUrl={activeViewOnceMsg.imageUrl || ''}
+            senderName={otherUser.fullName}
+            viewerUserId={currentUser.userId}
+            onClose={handleCloseViewOnce}
+          />
         )}
       </AnimatePresence>
     </div>

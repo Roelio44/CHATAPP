@@ -64,6 +64,11 @@ export interface Message {
   senderId: string;
   text: string;
   imageUrl?: string;
+  isViewOnce?: boolean;
+  viewOnceOpened?: boolean;
+  viewOnceOpenedAt?: any;
+  audioUrl?: string; // base64 data URL for voice note
+  audioDuration?: number; // duration in seconds
   timestamp: any;
   seen: boolean;
   delivered: boolean;

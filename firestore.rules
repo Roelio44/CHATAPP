@@ -128,9 +128,15 @@ service cloud.firestore {
           && incoming().senderId == request.auth.uid
           && incoming().text is string && incoming().text.size() <= 2000
           && (!('imageUrl' in incoming()) || (incoming().imageUrl is string && incoming().imageUrl.size() <= 200000))
-          && (incoming().text.size() > 0 || ('imageUrl' in incoming() && incoming().imageUrl.size() > 0));
+          && (!('audioUrl' in incoming()) || (incoming().audioUrl is string && incoming().audioUrl.size() <= 350000))
+          && (incoming().text.size() > 0 || ('imageUrl' in incoming() && incoming().imageUrl.size() > 0) || ('audioUrl' in incoming() && incoming().audioUrl.size() > 0));
         allow update: if isSignedIn() && isValidId(messageId)
-          && (isAdmin() || incoming().senderId == request.auth.uid || ('seen' in incoming()));
+          && (
+            isAdmin() ||
+            incoming().senderId == request.auth.uid ||
+            ('seen' in incoming()) ||
+            ('viewOnceOpened' in incoming())
+          );
         allow delete: if isSignedIn() && isValidId(messageId)
           && (isAdmin() || existing().senderId == request.auth.uid);
       }

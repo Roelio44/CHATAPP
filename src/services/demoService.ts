@@ -177,16 +177,38 @@ export function sendDemoMessage(
   senderId: string,
   text: string,
   replyTo?: { id: string; text: string; senderName: string },
-  imageUrl?: string
+  imageUrl?: string,
+  options?: {
+    isViewOnce?: boolean;
+    audioUrl?: string;
+    audioDuration?: number;
+  }
 ): Message {
   const current = getDemoMessages(chatId);
-  const preview = text.trim() || (imageUrl ? '📷 Photo' : '');
+  let preview = text.trim();
+  if (!preview) {
+    if (options?.audioUrl) {
+      const dur = Math.round(options?.audioDuration || 0);
+      const m = Math.floor(dur / 60);
+      const s = dur % 60;
+      preview = `🎤 Voice message (${m}:${s.toString().padStart(2, '0')})`;
+    } else if (imageUrl) {
+      preview = options?.isViewOnce ? '🔒 View once photo' : '📷 Photo';
+    }
+  } else if (options?.isViewOnce) {
+    preview = `🔒 View once photo • ${text.trim()}`;
+  }
+
   const newMsg: Message = {
     id: `msg_${Date.now()}`,
     chatId,
     senderId,
     text: text.trim(),
     imageUrl,
+    isViewOnce: options?.isViewOnce,
+    viewOnceOpened: options?.isViewOnce ? false : undefined,
+    audioUrl: options?.audioUrl,
+    audioDuration: options?.audioDuration,
     timestamp: new Date(),
     seen: false,
     delivered: true,
@@ -237,4 +259,15 @@ export function sendDemoMessage(
   }, 1200);
 
   return newMsg;
+}
+
+export function markDemoViewOnceAsOpened(chatId: string, messageId: string) {
+  const current = getDemoMessages(chatId);
+  const updated = current.map((m) =>
+    m.id === messageId ? { ...m, viewOnceOpened: true } : m
+  );
+  try {
+    localStorage.setItem(`${STORAGE_MESSAGES_KEY}_${chatId}`, JSON.stringify(updated));
+  } catch (e) {}
+  window.dispatchEvent(new CustomEvent(`linkup_demo_msg_${chatId}`));
 }

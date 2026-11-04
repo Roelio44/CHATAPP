@@ -70,7 +70,7 @@
     },
     "Message": {
       "title": "Message",
-      "description": "Real-time chat message with support for text and photos",
+      "description": "Real-time chat message with support for text, photos, view-once disappearing photos, and voice notes",
       "type": "object",
       "properties": {
         "messageId": { "type": "string", "maxLength": 128 },
@@ -78,6 +78,10 @@
         "senderId": { "type": "string", "maxLength": 128 },
         "text": { "type": "string", "maxLength": 2000 },
         "imageUrl": { "type": "string", "maxLength": 200000 },
+        "isViewOnce": { "type": "boolean" },
+        "viewOnceOpened": { "type": "boolean" },
+        "audioUrl": { "type": "string", "maxLength": 350000 },
+        "audioDuration": { "type": "number" },
         "timestamp": { "type": "string", "format": "date-time" },
         "seen": { "type": "boolean" },
         "delivered": { "type": "boolean" },

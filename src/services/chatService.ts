@@ -60,15 +60,33 @@ export async function sendMessage(
   receiverId: string,
   text: string,
   replyTo?: { id: string; text: string; senderName: string },
-  imageUrl?: string
+  imageUrl?: string,
+  options?: {
+    isViewOnce?: boolean;
+    audioUrl?: string;
+    audioDuration?: number;
+  }
 ): Promise<string> {
   const trimmedText = text.trim();
-  if (!trimmedText && !imageUrl) return '';
+  const hasAudio = !!options?.audioUrl;
+  if (!trimmedText && !imageUrl && !hasAudio) return '';
 
   const messagesRef = collection(db, 'chats', chatId, 'messages');
   const chatRef = doc(db, 'chats', chatId);
 
-  const previewText = trimmedText || (imageUrl ? '📷 Photo' : '');
+  let previewText = trimmedText;
+  if (!previewText) {
+    if (hasAudio) {
+      const dur = Math.round(options?.audioDuration || 0);
+      const m = Math.floor(dur / 60);
+      const s = dur % 60;
+      previewText = `🎤 Voice message (${m}:${s.toString().padStart(2, '0')})`;
+    } else if (imageUrl) {
+      previewText = options?.isViewOnce ? '🔒 View once photo' : '📷 Photo';
+    }
+  } else if (options?.isViewOnce) {
+    previewText = `🔒 View once photo • ${trimmedText}`;
+  }
 
   try {
     // 0. Ensure the parent chat document exists with both participants
@@ -103,6 +121,15 @@ export async function sendMessage(
 
     if (imageUrl) {
       messagePayload.imageUrl = imageUrl;
+      if (options?.isViewOnce) {
+        messagePayload.isViewOnce = true;
+        messagePayload.viewOnceOpened = false;
+      }
+    }
+
+    if (hasAudio && options?.audioUrl) {
+      messagePayload.audioUrl = options.audioUrl;
+      messagePayload.audioDuration = Math.round(options.audioDuration || 0);
     }
 
     const msgDoc = await addDoc(messagesRef, messagePayload);
@@ -126,6 +153,18 @@ export async function sendMessage(
   } catch (err) {
     console.warn('Error in sendMessage:', err);
     return '';
+  }
+}
+
+export async function markViewOnceAsOpened(chatId: string, messageId: string): Promise<void> {
+  try {
+    const msgRef = doc(db, 'chats', chatId, 'messages', messageId);
+    await updateDoc(msgRef, {
+      viewOnceOpened: true,
+      viewOnceOpenedAt: serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn('Failed to mark view once photo as opened:', err);
   }
 }
 
