@@ -80,7 +80,7 @@ export const WebAppLayout: React.FC<WebAppLayoutProps> = ({
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 select-none">
+    <div className="h-[100dvh] w-full max-w-full flex flex-col overflow-hidden bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 select-none">
       {/* Real-time platform server broadcast alert banner */}
       <SystemAlertBanner />
 

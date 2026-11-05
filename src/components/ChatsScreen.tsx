@@ -158,30 +158,30 @@ export const ChatsScreen: React.FC<ChatsScreenProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 transition-colors">
-      {/* Top Header */}
-      <div className="px-5 pt-3 pb-2">
+      {/* Top Header (Safe Area & Phone Optimized) */}
+      <div className="px-4 sm:px-5 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-2 app-chrome">
         <div className="flex items-center justify-between mb-3">
           <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Chats
           </h1>
           <button
             onClick={onNavigateToSearch}
-            className="p-2 rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600/20 active:scale-95 transition-all cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full bg-blue-600/10 text-blue-600 dark:text-blue-400 hover:bg-blue-600/20 active:scale-90 transition-all cursor-pointer touch-manipulation"
             title="Start new conversation"
           >
             <UserPlus className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Search Bar (text-base on phone stops iOS Safari zoom) */}
         <div className="relative">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 text-sm rounded-2xl bg-zinc-200/60 dark:bg-zinc-800/60 border border-transparent focus:border-blue-500/30 dark:focus:border-blue-500/30 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-hidden transition-all"
+            className="w-full pl-10 pr-4 py-2.5 text-base sm:text-sm rounded-2xl bg-zinc-200/60 dark:bg-zinc-800/60 border border-transparent focus:border-blue-500/30 dark:focus:border-blue-500/30 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-hidden transition-all"
           />
         </div>
 

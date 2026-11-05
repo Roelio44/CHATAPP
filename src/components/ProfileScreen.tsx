@@ -76,14 +76,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 transition-colors select-none">
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-5 pt-3 pb-2">
+      {/* Top Header (Safe Area & Phone Optimized) */}
+      <div className="flex items-center justify-between px-4 sm:px-5 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-2 app-chrome">
         <h1 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
           My Profile
         </h1>
         <button
           onClick={onNavigateToSettings}
-          className="p-2 rounded-full bg-zinc-200/60 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full bg-zinc-200/60 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-800 active:scale-90 transition-all cursor-pointer touch-manipulation"
           title="Settings"
         >
           <Settings className="w-5 h-5" />

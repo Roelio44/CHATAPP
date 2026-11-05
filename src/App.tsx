@@ -482,7 +482,7 @@ function MainApp() {
     <>
       {/* Push Notification Opt-in Prompt Banner */}
       {showPermissionPrompt && (
-        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white px-4 py-2.5 text-xs flex items-center justify-between shadow-md z-40 shrink-0 select-none">
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white px-4 pt-[max(env(safe-area-inset-top,0px),0.5rem)] pb-2.5 text-xs flex items-center justify-between shadow-md z-40 shrink-0 select-none app-chrome">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="p-1.5 bg-white/20 rounded-lg shrink-0">
               <Bell className="w-4 h-4 text-amber-300 animate-bounce" />

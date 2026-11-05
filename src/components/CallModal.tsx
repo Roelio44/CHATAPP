@@ -382,7 +382,7 @@ export const CallModal: React.FC<CallModalProps> = ({
         <div className="absolute -bottom-40 -right-40 w-96 h-96 rounded-full bg-indigo-600/20 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-lg h-full max-h-[92vh] sm:h-[85vh] sm:rounded-3xl flex flex-col justify-between p-6 sm:p-8 bg-zinc-950/80 border border-zinc-800/60 shadow-2xl overflow-hidden">
+      <div className="relative w-full max-w-lg h-full sm:max-h-[88vh] sm:rounded-3xl flex flex-col justify-between p-4 sm:p-8 pt-[max(env(safe-area-inset-top,0px),1rem)] pb-[max(env(safe-area-inset-bottom,0px),1.25rem)] bg-zinc-950/90 border border-zinc-800/60 shadow-2xl overflow-hidden">
         {/* Top Header */}
         <div className="flex items-center justify-between z-20">
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 text-white text-xs backdrop-blur-md">

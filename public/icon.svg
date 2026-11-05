@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8"/>
+      <stop offset="50%" stop-color="#2563eb"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="bubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f1f5f9"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <!-- Background rounded squircle -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)"/>
+
+  <!-- Chat bubble outer with drop shadow -->
+  <g filter="url(#shadow)">
+    <!-- Main Chat Bubble -->
+    <path d="M120 140 C120 100 152 68 192 68 L320 68 C360 68 392 100 392 140 L392 272 C392 312 360 344 320 344 L204 344 L144 394 C134 402 120 395 120 382 L120 140 Z" fill="url(#bubbleGrad)"/>
+    
+    <!-- Red Accent Albania Star / Double Eagle emblem inside bubble -->
+    <!-- Stylized modern eagle wings & stars in Albanian flag red (#e11d48 / #dc2626) -->
+    <path d="M256 120 L272 170 L324 170 L282 200 L298 250 L256 220 L214 250 L230 200 L188 170 L240 170 Z" fill="#dc2626"/>
+    
+    <!-- Secondary Chat Message dots / signal waves -->
+    <circle cx="216" cy="286" r="14" fill="#2563eb"/>
+    <circle cx="256" cy="286" r="14" fill="#2563eb"/>
+    <circle cx="296" cy="286" r="14" fill="#2563eb"/>
+  </g>
+</svg>

@@ -35,6 +35,7 @@ import {
   submitVerificationRequest,
   cancelVerificationRequest,
 } from '../services/adminService';
+import { usePWAInstall } from '../hooks/usePWAInstall';
 
 interface SettingsScreenProps {
   currentProfile: UserProfile;
@@ -69,6 +70,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [localVerificationStatus, setLocalVerificationStatus] = useState<string>(
     currentProfile.verificationStatus || (currentProfile.verificationRequested ? 'pending' : 'none')
   );
+
+  const { isInstallable, isInstalled, isStandalone, isIOS, installPWA } = usePWAInstall();
 
   const handleSubmitVerification = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -138,11 +141,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 transition-colors select-none">
-      {/* Top Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 z-20">
+      {/* Top Header (Safe Area & Phone Optimized) */}
+      <div className="flex items-center gap-2 px-4 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-3 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 z-20 app-chrome">
         <button
           onClick={onBack}
-          className="p-1.5 -ml-1 rounded-full text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 -ml-1 rounded-full text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-90 transition-all cursor-pointer touch-manipulation"
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
@@ -462,6 +465,86 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </div>
         </div>
 
+        {/* Phone Web App Installation Section */}
+        <div>
+          <div className="px-1 mb-2 text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 flex items-center gap-1.5">
+            <Smartphone className="w-3.5 h-3.5 text-blue-500" />
+            <span>Phone Web App</span>
+          </div>
+
+          <div className="rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800/60 p-4 shadow-xs space-y-3">
+            {isStandalone ? (
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Check className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                    Running in App Mode
+                  </h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Installed on phone home screen with fullscreen mode and instant access.
+                  </p>
+                </div>
+              </div>
+            ) : isIOS ? (
+              <div className="space-y-2.5">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      Add to iPhone Home Screen
+                    </h4>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                      Run AlbaniaCHAT like a native iOS phone app without the Safari address bar:
+                    </p>
+                  </div>
+                </div>
+                <div className="p-3 rounded-xl bg-zinc-100 dark:bg-zinc-800/70 text-xs text-zinc-700 dark:text-zinc-300 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">1</span>
+                    <span>Tap the <strong>Share button (⎋)</strong> at the bottom of Safari.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">2</span>
+                    <span>Scroll down and tap <strong>"Add to Home Screen" ➕</strong>.</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[10px] flex items-center justify-center shrink-0">3</span>
+                    <span>Tap <strong>Add</strong>. Launch fullscreen from your phone!</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-blue-500/15 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                    <Smartphone className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      Install AlbaniaCHAT App
+                    </h4>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                      Install as a standalone Progressive Web App for fast launch, background calls, and full-screen experience.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={installPWA}
+                  className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer touch-manipulation"
+                >
+                  <Smartphone className="w-4 h-4" />
+                  <span>Install to Phone Home Screen</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* About App */}
         <div className="p-4 rounded-2xl bg-zinc-100 dark:bg-zinc-900 text-center">
           <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
@@ -531,7 +614,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   placeholder="Describe your account, public profile, social links, or reason for requesting a verified badge..."
                   value={verificationReason}
                   onChange={(e) => setVerificationReason(e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
+                  className="w-full px-3.5 py-2.5 text-base sm:text-xs rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500 resize-none transition-all"
                 />
                 <div className="text-right text-[10px] text-zinc-400 mt-1">
                   {verificationReason.length} / 300 characters

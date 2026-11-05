@@ -92,7 +92,7 @@ export const SystemAlertBanner: React.FC = () => {
   return (
     <>
       <div
-        className={`w-full border-b px-4 py-2.5 flex items-center justify-between text-xs sm:text-sm font-medium z-40 transition-all ${typeConfig.bg}`}
+        className={`w-full border-b px-4 pt-[max(env(safe-area-inset-top,0px),0.5rem)] pb-2 flex items-center justify-between text-xs sm:text-sm font-medium z-40 transition-all app-chrome ${typeConfig.bg}`}
       >
         <div
           className="flex items-center gap-2.5 flex-1 min-w-0 cursor-pointer"

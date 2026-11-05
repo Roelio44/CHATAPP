@@ -88,6 +88,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Long-press timer & touch coordinates refs for mobile gesture reactions
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const touchStartPosRef = useRef<{ x: number; y: number } | null>(null);
+  const isLongPressTriggeredRef = useRef<boolean>(false);
+
   // Real-time messages listener
   useEffect(() => {
     if (!chatId) return;
@@ -161,6 +166,18 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Mobile virtual keyboard avoidance on phones (iOS Safari & Android Chrome)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return;
+    const handleViewportChange = () => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+    window.visualViewport.addEventListener('resize', handleViewportChange);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleViewportChange);
+    };
+  }, []);
 
   const handleEndCall = async (
     durationSeconds: number,
@@ -339,6 +356,42 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
     }
   };
 
+  // Long press gesture listeners for touch and pointer
+  const startLongPress = (msgId: string, clientX: number, clientY: number) => {
+    cancelLongPress();
+    isLongPressTriggeredRef.current = false;
+    touchStartPosRef.current = { x: clientX, y: clientY };
+
+    longPressTimerRef.current = setTimeout(() => {
+      isLongPressTriggeredRef.current = true;
+      if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+        try {
+          navigator.vibrate(40);
+        } catch (e) {}
+      }
+      setActiveReactionMenuMsgId(msgId);
+    }, 420);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+    touchStartPosRef.current = null;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartPosRef.current) return;
+    const touch = e.touches[0];
+    if (!touch) return;
+    const deltaX = Math.abs(touch.clientX - touchStartPosRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartPosRef.current.y);
+    if (deltaX > 10 || deltaY > 10) {
+      cancelLongPress();
+    }
+  };
+
   const handleConfirmDelete = async () => {
     if (!messageToDelete) return;
     const id = messageToDelete.id;
@@ -357,12 +410,12 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 transition-colors select-none">
-      {/* Top Header App Bar */}
-      <div className="flex items-center justify-between px-3 py-2.5 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors">
+      {/* Top Header App Bar (Optimized for Phone Safe Areas & Thumb Reach) */}
+      <div className="flex items-center justify-between px-3 pt-[max(env(safe-area-inset-top,0px),0.65rem)] pb-2.5 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors app-chrome">
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={onBack}
-            className="p-1.5 -ml-1 rounded-full text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-95 transition-all cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 -ml-1 rounded-full text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-90 transition-all cursor-pointer touch-manipulation"
             title="Back to chats"
           >
             <ArrowLeft className="w-5 h-5" />
@@ -404,25 +457,25 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
           </div>
         </div>
 
-        {/* Action icons */}
-        <div className="flex items-center gap-1 text-zinc-600 dark:text-zinc-400">
+        {/* Action icons (Comfortable 44px phone hitboxes) */}
+        <div className="flex items-center gap-0.5 text-zinc-600 dark:text-zinc-400">
           <button
             onClick={() => setActiveCall('audio')}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer touch-manipulation active:scale-95"
             title="Start voice call"
           >
             <Phone className="w-4 h-4" />
           </button>
           <button
             onClick={() => setActiveCall('video')}
-            className="p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer"
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer touch-manipulation active:scale-95"
             title="Start video call"
           >
             <Video className="w-4 h-4" />
           </button>
           <button
             onClick={onBack}
-            className="hidden md:flex p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
+            className="hidden md:flex min-w-[44px] min-h-[44px] items-center justify-center p-2 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 transition-colors cursor-pointer"
             title="Close conversation"
           >
             <X className="w-4 h-4" />
@@ -431,7 +484,14 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
       </div>
 
       {/* Message Feed Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 relative">
+        {/* Dimmed backdrop when long-press reaction bar is active */}
+        {activeReactionMenuMsgId && (
+          <div
+            className="fixed inset-0 z-20 bg-black/10 dark:bg-black/30 backdrop-blur-[0.5px] transition-opacity"
+            onClick={() => setActiveReactionMenuMsgId(null)}
+          />
+        )}
         <div className="max-w-4xl mx-auto w-full space-y-3">
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center p-6 my-auto">
@@ -459,18 +519,93 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         ) : (
           messages.map((msg) => {
             const isMe = msg.senderId === currentUser.uid;
+            const isReactionMenuOpen = activeReactionMenuMsgId === msg.id;
 
             return (
               <div
                 key={msg.id}
-                className={`flex flex-col group ${isMe ? 'items-end' : 'items-start'}`}
+                className={`relative flex flex-col group ${isMe ? 'items-end' : 'items-start'} ${
+                  isReactionMenuOpen ? 'z-30' : ''
+                }`}
               >
+                {/* Floating Quick Reaction Pill Bar (triggered by long-press or smile button) */}
+                <AnimatePresence>
+                  {isReactionMenuOpen && (
+                    <motion.div
+                      initial={{ scale: 0.6, opacity: 0, y: 8 }}
+                      animate={{ scale: 1, opacity: 1, y: 0 }}
+                      exit={{ scale: 0.6, opacity: 0, y: 8 }}
+                      transition={{ type: 'spring', stiffness: 450, damping: 25 }}
+                      className={`absolute -top-12 z-40 flex items-center gap-0.5 px-2 py-1 bg-white/95 dark:bg-zinc-800/95 backdrop-blur-md rounded-full shadow-2xl border border-zinc-200/90 dark:border-zinc-700/90 select-none ${
+                        isMe ? 'right-0 origin-bottom-right' : 'left-0 origin-bottom-left'
+                      }`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {['❤️', '👍', '🔥', '😂', '😮', '😢', '👏', '🙏'].map((emoji) => {
+                        const hasReacted = msg.reactions?.[emoji]?.includes(currentUser.uid);
+                        return (
+                          <button
+                            key={emoji}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleReaction(msg.id, emoji);
+                            }}
+                            className={`w-8 h-8 flex items-center justify-center text-lg rounded-full cursor-pointer transition-transform hover:scale-130 active:scale-90 ${
+                              hasReacted
+                                ? 'bg-blue-100 dark:bg-blue-900/60 ring-2 ring-blue-500 scale-110'
+                                : 'hover:bg-zinc-100 dark:hover:bg-zinc-700'
+                            }`}
+                            title={`React with ${emoji}`}
+                          >
+                            {emoji}
+                          </button>
+                        );
+                      })}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveReactionMenuMsgId(null);
+                          setPickerForReactionMsgId(msg.id);
+                        }}
+                        className="w-8 h-8 flex items-center justify-center text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:scale-115 active:scale-95 transition-transform cursor-pointer rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-700 border-l border-zinc-200 dark:border-zinc-700 ml-0.5 pl-1"
+                        title="All emojis"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <div
-                  className={`relative max-w-[80%] sm:max-w-[70%] px-3.5 py-2.5 rounded-2xl shadow-xs transition-all ${
+                  className={`relative max-w-[80%] sm:max-w-[70%] px-3.5 py-2.5 rounded-2xl shadow-xs transition-all select-none touch-manipulation cursor-pointer ${
                     isMe
                       ? 'bg-blue-600 text-white rounded-br-xs'
                       : 'bg-white dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100 rounded-bl-xs border border-zinc-200/50 dark:border-zinc-700/50'
-                  }`}
+                  } ${isReactionMenuOpen ? 'ring-2 ring-blue-500/70 shadow-lg scale-[1.01]' : ''}`}
+                  style={{ WebkitTouchCallout: 'none' }}
+                  onTouchStart={(e) => {
+                    const touch = e.touches[0];
+                    if (touch) {
+                      startLongPress(msg.id, touch.clientX, touch.clientY);
+                    }
+                  }}
+                  onTouchEnd={cancelLongPress}
+                  onTouchCancel={cancelLongPress}
+                  onTouchMove={handleTouchMove}
+                  onMouseDown={(e) => {
+                    if (e.button === 0) {
+                      startLongPress(msg.id, e.clientX, e.clientY);
+                    }
+                  }}
+                  onMouseUp={cancelLongPress}
+                  onMouseLeave={cancelLongPress}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    cancelLongPress();
+                    setActiveReactionMenuMsgId(msg.id);
+                  }}
                 >
                   {/* Quoted Reply if any */}
                   {msg.replyTo && (
@@ -527,7 +662,10 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                       ) : (
                         <button
                           type="button"
-                          onClick={() => handleOpenViewOnce(msg)}
+                          onClick={(e) => {
+                            if (isLongPressTriggeredRef.current) return;
+                            handleOpenViewOnce(msg);
+                          }}
                           className="flex items-center gap-2.5 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 text-xs font-semibold cursor-pointer transition-all active:scale-95"
                           title="Open view-once photo"
                         >
@@ -548,7 +686,10 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                   {/* Standard Photo (non view-once) */}
                   {msg.imageUrl && !msg.isViewOnce && (
                     <div
-                      onClick={() => setViewingPhotoUrl(msg.imageUrl || null)}
+                      onClick={(e) => {
+                        if (isLongPressTriggeredRef.current) return;
+                        setViewingPhotoUrl(msg.imageUrl || null);
+                      }}
                       className="mb-2 relative rounded-xl overflow-hidden cursor-pointer group/photo bg-black/5 dark:bg-black/30"
                     >
                       <img
@@ -597,7 +738,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 {/* Message Reactions Pills */}
                 {msg.reactions && Object.keys(msg.reactions).length > 0 && (
                   <div
-                    className={`flex flex-wrap gap-1 mt-1 z-10 ${
+                    className={`flex flex-wrap items-center gap-1.5 mt-1.5 z-10 ${
                       isMe ? 'justify-end' : 'justify-start'
                     }`}
                   >
@@ -609,60 +750,42 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                           key={emoji}
                           type="button"
                           onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border shadow-xs transition-transform active:scale-90 cursor-pointer ${
+                          className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs border shadow-xs transition-all active:scale-90 cursor-pointer ${
                             hasReacted
-                              ? 'bg-blue-100 text-blue-700 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-700 font-semibold'
+                              ? 'bg-blue-100 text-blue-700 border-blue-400 dark:bg-blue-950/90 dark:text-blue-300 dark:border-blue-600 font-semibold ring-1 ring-blue-400/40'
                               : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-700'
                           }`}
                           title={`${uids.length} reaction${uids.length > 1 ? 's' : ''}${
-                            hasReacted ? ' (tap to remove)' : ' (tap to add)'
+                            hasReacted ? ' (Tap to remove)' : ' (Tap to react)'
                           }`}
                         >
                           <span className="text-sm leading-none">{emoji}</span>
-                          <span className="text-[10px] font-medium leading-none">{uids.length}</span>
+                          <span className="text-[11px] font-semibold leading-none">{uids.length}</span>
                         </button>
                       );
                     })}
+                    {/* Add reaction plus button */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveReactionMenuMsgId(
+                          activeReactionMenuMsgId === msg.id ? null : msg.id
+                        )
+                      }
+                      className="inline-flex items-center justify-center w-6 h-6 rounded-full text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors border border-dashed border-zinc-300 dark:border-zinc-700 cursor-pointer"
+                      title="Add reaction"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
                   </div>
                 )}
 
-                {/* Message Action Toolbar (React, Reply, Delete) */}
+                {/* Message Action Toolbar (Desktop hover: React, Reply, Delete) */}
                 <div
                   className={`relative flex items-center gap-1 mt-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity ${
                     isMe ? 'justify-end mr-1' : 'justify-start ml-1'
                   }`}
                 >
-                  {/* Quick Reaction floating bubble */}
-                  {activeReactionMenuMsgId === msg.id && (
-                    <div
-                      className={`absolute bottom-full mb-1 z-30 flex items-center gap-1 p-1 bg-white dark:bg-zinc-900 rounded-full shadow-xl border border-zinc-200 dark:border-zinc-700 ${
-                        isMe ? 'right-0' : 'left-0'
-                      }`}
-                    >
-                      {['❤️', '👍', '😂', '😮', '😢', '🔥'].map((emoji) => (
-                        <button
-                          key={emoji}
-                          type="button"
-                          onClick={() => handleToggleReaction(msg.id, emoji)}
-                          className="w-7 h-7 flex items-center justify-center text-base hover:scale-125 transition-transform cursor-pointer rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        >
-                          {emoji}
-                        </button>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setActiveReactionMenuMsgId(null);
-                          setPickerForReactionMsgId(msg.id);
-                        }}
-                        className="w-7 h-7 flex items-center justify-center text-zinc-600 dark:text-zinc-300 hover:scale-110 transition-transform cursor-pointer rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                        title="All emojis"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-
                   {/* React Button */}
                   <button
                     type="button"
@@ -672,7 +795,7 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                       )
                     }
                     className="p-1 rounded-full text-zinc-400 hover:text-amber-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-                    title="React"
+                    title="React (or long-press message)"
                   >
                     <Smile className="w-3.5 h-3.5" />
                   </button>
@@ -803,12 +926,12 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
         </div>
       )}
 
-      {/* Message Input Bottom Bar */}
+      {/* Message Input Bottom Bar (Safe Area & Phone Ergonomics Optimized) */}
       <form
         onSubmit={handleSend}
-        className="px-4 py-3 bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors"
+        className="px-3 sm:px-4 pt-2.5 pb-[max(env(safe-area-inset-bottom,0px),0.75rem)] bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-t border-zinc-200/80 dark:border-zinc-800/80 z-20 transition-colors shrink-0"
       >
-        <div className="max-w-4xl mx-auto flex items-center gap-2 w-full">
+        <div className="max-w-4xl mx-auto flex items-center gap-1.5 sm:gap-2 w-full">
           {isRecordingVoice ? (
             <VoiceRecorderBar
               onSendVoice={handleSendVoiceMessage}
@@ -825,12 +948,12 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 onChange={handlePhotoSelect}
               />
 
-              {/* Photo attach button */}
+              {/* Photo attach button (Min 44px touch area) */}
               <button
                 type="button"
                 disabled={isCompressing || isSending}
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+                className="min-w-[42px] min-h-[42px] flex items-center justify-center p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer shrink-0 disabled:opacity-50 touch-manipulation active:scale-95"
                 title="Send photo"
               >
                 {isCompressing ? (
@@ -840,10 +963,11 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 )}
               </button>
 
+              {/* Emoji picker trigger button */}
               <button
                 type="button"
                 onClick={() => setShowEmojiPicker(!showEmojiPicker)}
-                className="p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0"
+                className="min-w-[42px] min-h-[42px] flex items-center justify-center p-2 rounded-full text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer shrink-0 touch-manipulation active:scale-95"
                 title="Add emoji"
               >
                 <Smile className="w-5 h-5" />
@@ -856,19 +980,25 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                   placeholder={
                     selectedPhoto
                       ? isViewOnceActive
-                        ? 'Add a caption for view-once photo... (optional)'
-                        : 'Add a caption... (optional, press Enter to send)'
-                      : 'Type a message (Press Enter to send)...'
+                        ? 'Add caption (view-once)...'
+                        : 'Add caption...'
+                      : 'Type a message...'
                   }
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
+                  onFocus={() => {
+                    setTimeout(() => {
+                      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+                    }, 200);
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
                       handleSend();
                     }
                   }}
-                  className="w-full px-4 py-2.5 text-sm rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 border border-transparent transition-all"
+                  /* text-base on mobile prevents iOS Safari auto-zoom bug, sm:text-sm for desktop */
+                  className="w-full px-4 py-2.5 text-base sm:text-sm rounded-2xl bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 border border-transparent transition-all"
                 />
               </div>
 
@@ -877,22 +1007,22 @@ export const ChatRoomScreen: React.FC<ChatRoomScreenProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsRecordingVoice(true)}
-                  className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  className="min-w-[44px] min-h-[44px] p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-90 transition-all cursor-pointer flex items-center justify-center shrink-0 touch-manipulation"
                   title="Record voice message"
                 >
-                  <Mic className="w-4 h-4" />
+                  <Mic className="w-5 h-5" />
                 </button>
               ) : (
                 <button
                   type="submit"
                   disabled={(!inputText.trim() && !selectedPhoto) || isSending || isCompressing}
-                  className="p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-95 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0"
+                  className="min-w-[44px] min-h-[44px] p-2.5 rounded-full bg-blue-600 text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 active:scale-90 disabled:opacity-40 disabled:hover:bg-blue-600 transition-all cursor-pointer flex items-center justify-center shrink-0 touch-manipulation"
                   title="Send message (Enter)"
                 >
                   {isSending ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <Loader2 className="w-5 h-5 animate-spin" />
                   ) : (
-                    <Send className="w-4 h-4" />
+                    <Send className="w-5 h-5" />
                   )}
                 </button>
               )}

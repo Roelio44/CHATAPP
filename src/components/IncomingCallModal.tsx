@@ -20,14 +20,26 @@ export const IncomingCallModal: React.FC<IncomingCallModalProps> = ({
   onAccept,
   onDecline,
 }) => {
-  // Play ringtone while incoming call modal is mounted
+  // Play ringtone and trigger phone vibration while incoming call modal is mounted
   useEffect(() => {
     const stopSound = playIncomingCallSound();
-    return () => stopSound();
+    let vibrateInterval: any = null;
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([400, 200, 400, 200, 600]);
+        vibrateInterval = setInterval(() => {
+          navigator.vibrate([400, 200, 400, 200, 600]);
+        }, 2200);
+      } catch (e) {}
+    }
+    return () => {
+      stopSound();
+      if (vibrateInterval) clearInterval(vibrateInterval);
+    };
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pt-[max(env(safe-area-inset-top,0px),1rem)] pb-[max(env(safe-area-inset-bottom,0px),1rem)] bg-black/90 backdrop-blur-xl select-none animate-in fade-in duration-200">
       <div className="relative w-full max-w-sm rounded-3xl bg-zinc-950/95 border border-zinc-800 p-6 sm:p-7 shadow-2xl flex flex-col items-center text-center overflow-hidden">
         {/* Glow Effects */}
         <div className="absolute -top-20 -left-20 w-48 h-48 rounded-full bg-blue-600/25 blur-3xl pointer-events-none" />

@@ -182,8 +182,8 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 transition-colors select-none">
-      {/* Search Header */}
-      <div className="px-4 lg:px-5 pt-3 pb-3 shrink-0">
+      {/* Search Header (Safe Area & Phone Optimized) */}
+      <div className="px-4 lg:px-5 pt-[max(env(safe-area-inset-top,0px),0.75rem)] pb-3 shrink-0 app-chrome">
         <div className="flex items-center justify-between mb-2.5">
           <h1 className="text-xl lg:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
             Discover People
@@ -191,7 +191,7 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
           <button
             onClick={loadSuggestedUsers}
             disabled={isLoadingInitial || isSearching}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 transition-all cursor-pointer"
+            className="min-w-[40px] min-h-[40px] flex items-center justify-center p-2 rounded-xl text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50 active:scale-90 transition-all cursor-pointer touch-manipulation"
             title="Refresh list"
           >
             <RefreshCw className={`w-4 h-4 ${isLoadingInitial ? 'animate-spin' : ''}`} />
@@ -199,13 +199,13 @@ export const SearchUsersScreen: React.FC<SearchUsersScreenProps> = ({
         </div>
 
         <form onSubmit={handleManualSearch} className="relative">
-          <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <AtSign className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Search by username (@handle), name, or email..."
+            placeholder="Search username (@handle), name, or email..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-20 py-2.5 text-sm rounded-2xl bg-zinc-200/60 dark:bg-zinc-800/60 border border-transparent focus:border-blue-500/30 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-hidden transition-all shadow-inner"
+            className="w-full pl-10 pr-20 py-2.5 text-base sm:text-sm rounded-2xl bg-zinc-200/60 dark:bg-zinc-800/60 border border-transparent focus:border-blue-500/30 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400 focus:outline-hidden transition-all shadow-inner"
           />
 
           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1">
