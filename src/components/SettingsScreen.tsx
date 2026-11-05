@@ -52,7 +52,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const [showOnlineStatus, setShowOnlineStatus] = useState(true);
   const [readReceipts, setReadReceipts] = useState(true);
-  const [notifications, setNotifications] = useState(true);
+  const [notifications, setNotifications] = useState(
+    typeof window !== 'undefined' && 'Notification' in window
+      ? Notification.permission === 'granted'
+      : false
+  );
 
   // Verification request state
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);

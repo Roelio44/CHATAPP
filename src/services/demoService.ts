@@ -256,6 +256,7 @@ export function sendDemoMessage(
       saveDemoChats(updatedChats);
     }
     window.dispatchEvent(new CustomEvent(`linkup_demo_msg_${chatId}`, { detail: replyMsg }));
+    window.dispatchEvent(new CustomEvent('linkup_demo_msg_received', { detail: replyMsg }));
   }, 1200);
 
   return newMsg;

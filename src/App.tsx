@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Bell, X } from 'lucide-react';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WebAppLayout } from './components/WebAppLayout';
@@ -26,6 +27,8 @@ import { MainTab, UserProfile, CallSession, CallType } from './types';
 import {
   db,
   collection,
+  doc,
+  getDoc,
   query,
   where,
   onSnapshot,
@@ -39,8 +42,10 @@ import {
   endCallSession,
 } from './services/callService';
 import {
+  initServiceWorker,
   requestNotificationPermission,
   sendWebNotification,
+  playMessageSound,
 } from './utils/notificationService';
 
 function MainApp() {
@@ -89,10 +94,53 @@ function MainApp() {
     }
   }, [activeTab, isAdmin]);
 
-  // Listen to total unread count for badge
+  // Initialize Service Worker for background notifications on mount
+  useEffect(() => {
+    initServiceWorker();
+  }, []);
+
+  // Listen for navigation events from Service Worker notification clicks
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'OPEN_CHAT') {
+        setActiveTab('chats');
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handler);
+    return () => navigator.serviceWorker.removeEventListener('message', handler);
+  }, []);
+
+  // Show intuitive permission prompt if notifications haven't been enabled yet
+  const [showPermissionPrompt, setShowPermissionPrompt] = useState(false);
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        setShowPermissionPrompt(true);
+      }
+    }
+  }, []);
+
+  const handleEnableNotifications = async () => {
+    const granted = await requestNotificationPermission();
+    if (granted) {
+      setShowPermissionPrompt(false);
+      sendWebNotification('AlbaniaCHAT Notifications Active', {
+        body: 'You will now receive incoming messages and call alerts even when outside the app!',
+      });
+    }
+  };
+
+  // State refs for tracking incoming messages and preventing duplicate notification bursts
+  const previousChatsStateRef = useRef<Record<string, { lastMessage?: string; lastSenderId?: string }>>({});
+  const isInitialSnapshotDoneRef = useRef(false);
+  const senderNamesCacheRef = useRef<Record<string, string>>({});
+
+  // Global real-time listener for incoming messages across all chats (fires even when not in the chat)
   useEffect(() => {
     if (!userProfile?.uid) return;
 
+    // Demo Mode incoming message handler
     if (userProfile.uid.startsWith('demo_')) {
       const updateDemoCount = () => {
         import('./services/demoService').then(({ getDemoChats }) => {
@@ -103,26 +151,102 @@ function MainApp() {
       };
       updateDemoCount();
       window.addEventListener('linkup_demo_chats_updated', updateDemoCount);
-      return () => window.removeEventListener('linkup_demo_chats_updated', updateDemoCount);
+
+      const handleDemoMessage = (e: any) => {
+        const msg = e.detail;
+        if (msg && msg.senderId !== userProfile.uid) {
+          const isActivelyInThisChat = activeChat?.chatId === msg.chatId && !document.hidden;
+          if (!isActivelyInThisChat) {
+            playMessageSound();
+            sendWebNotification('New message on AlbaniaCHAT', {
+              body: msg.text || (msg.imageUrl ? '📷 Photo' : msg.audioUrl ? '🎤 Voice note' : 'Sent an attachment'),
+              tag: `demo_${msg.chatId}`,
+              data: { chatId: msg.chatId },
+            });
+          }
+        }
+      };
+      window.addEventListener('linkup_demo_msg_received', handleDemoMessage);
+
+      return () => {
+        window.removeEventListener('linkup_demo_chats_updated', updateDemoCount);
+        window.removeEventListener('linkup_demo_msg_received', handleDemoMessage);
+      };
     }
 
     const chatsRef = collection(db, 'chats');
     const q = query(chatsRef, where('participants', 'array-contains', userProfile.uid));
 
-    const unsub = onSnapshot(q, (snapshot) => {
-      let count = 0;
-      snapshot.docs.forEach((docSnap) => {
-        const data = docSnap.data();
-        const unreadForMe = data.unreadCount?.[userProfile.uid] || 0;
-        if (unreadForMe > 0) {
-          count += 1;
+    const unsub = onSnapshot(
+      q,
+      async (snapshot) => {
+        let count = 0;
+
+        for (const docSnap of snapshot.docs) {
+          const data = docSnap.data();
+          const chatId = docSnap.id;
+          const unreadForMe = data.unreadCount?.[userProfile.uid] || 0;
+          if (unreadForMe > 0) {
+            count += 1;
+          }
+
+          // Detect new incoming message from the other party
+          if (isInitialSnapshotDoneRef.current) {
+            const prev = previousChatsStateRef.current[chatId];
+            const hasNewMessage =
+              data.lastMessage &&
+              data.lastSenderId &&
+              data.lastSenderId !== userProfile.uid &&
+              data.lastMessage !== prev?.lastMessage;
+
+            if (hasNewMessage) {
+              const isActivelyInThisChat = activeChat?.chatId === chatId && !document.hidden;
+
+              if (!isActivelyInThisChat) {
+                // Resolve sender's display name
+                let senderName = senderNamesCacheRef.current[data.lastSenderId];
+                if (!senderName) {
+                  try {
+                    const senderDoc = await getDoc(doc(db, 'users', data.lastSenderId));
+                    if (senderDoc.exists()) {
+                      senderName = senderDoc.data().fullName || senderDoc.data().userId || 'AlbaniaCHAT';
+                      senderNamesCacheRef.current[data.lastSenderId] = senderName;
+                    }
+                  } catch (e) {
+                    senderName = 'AlbaniaCHAT';
+                  }
+                }
+
+                // Play audio chime
+                playMessageSound();
+
+                // Dispatch background push notification via Service Worker
+                await sendWebNotification(senderName || 'AlbaniaCHAT', {
+                  body: data.lastMessage,
+                  tag: `chat_${chatId}`,
+                  data: { chatId, url: '/' },
+                });
+              }
+            }
+          }
+
+          // Cache latest state
+          previousChatsStateRef.current[chatId] = {
+            lastMessage: data.lastMessage,
+            lastSenderId: data.lastSenderId,
+          };
         }
-      });
-      setUnreadChatsCount(count);
-    });
+
+        setUnreadChatsCount(count);
+        isInitialSnapshotDoneRef.current = true;
+      },
+      (error) => {
+        console.warn('Real-time chats notification listener warning:', error);
+      }
+    );
 
     return () => unsub();
-  }, [userProfile?.uid]);
+  }, [userProfile?.uid, activeChat?.chatId]);
 
   // Listen to pending requests count for badge
   useEffect(() => {
@@ -162,10 +286,12 @@ function MainApp() {
       setIncomingCall(session);
 
       if (session && session.status === 'calling') {
-        sendWebNotification(`Incoming ${session.type} call`, {
+        sendWebNotification(`Incoming ${session.type === 'video' ? 'Video' : 'Voice'} Call`, {
           body: `${session.callerName} is calling you on AlbaniaCHAT...`,
           tag: session.callId,
           requireInteraction: true,
+          vibrate: [500, 200, 500, 200, 500] as any,
+          data: { callId: session.callId, url: '/' },
         });
       }
     });
@@ -354,6 +480,40 @@ function MainApp() {
 
   return (
     <>
+      {/* Push Notification Opt-in Prompt Banner */}
+      {showPermissionPrompt && (
+        <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 text-white px-4 py-2.5 text-xs flex items-center justify-between shadow-md z-40 shrink-0 select-none">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="p-1.5 bg-white/20 rounded-lg shrink-0">
+              <Bell className="w-4 h-4 text-amber-300 animate-bounce" />
+            </div>
+            <div className="min-w-0">
+              <span className="font-bold block">Enable Push Notifications</span>
+              <span className="text-blue-100 text-[11px] truncate block">
+                Receive incoming calls and message alerts when AlbaniaCHAT is in background or phone is locked.
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0 ml-3">
+            <button
+              type="button"
+              onClick={handleEnableNotifications}
+              className="px-3.5 py-1.5 bg-white hover:bg-blue-50 text-blue-700 font-bold rounded-xl text-xs shadow-xs transition-all active:scale-95 cursor-pointer"
+            >
+              Turn On
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowPermissionPrompt(false)}
+              className="p-1 hover:bg-white/20 rounded-lg text-white/80 transition-colors cursor-pointer"
+              title="Dismiss"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       <WebAppLayout
         activeTab={activeTab}
         onTabChange={(tab) => {
